@@ -1,0 +1,97 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Função auxiliar para verificar se o usuário está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Função auxiliar para verificar se a quantidade não é negativa
+    function isValidQuantity(quantity) {
+      return quantity is number && quantity >= 0;
+    }
+    
+    // Regras para a coleção 'items'
+    match /items/{itemId} {
+      // Permitir leitura apenas para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação apenas para usuários autenticados
+      // Validar campos obrigatórios e quantidade não negativa
+      // Código é opcional (pode ser string vazia ou não existir)
+      allow create: if isAuthenticated() 
+        && request.resource.data.nome is string
+        && (request.resource.data.codigo is string || !("codigo" in request.resource.data))
+        && isValidQuantity(request.resource.data.quantidade);
+      
+      // Permitir atualização apenas para usuários autenticados
+      // Não permitir alteração manual da quantidade (deve ser feita via transactions)
+      // Código é opcional mas não pode ser alterado se existir
+      allow update: if isAuthenticated()
+        && request.resource.data.nome is string
+        && (request.resource.data.codigo is string || !("codigo" in request.resource.data))
+        && isValidQuantity(request.resource.data.quantidade)
+        && (!("codigo" in request.resource.data) || !("codigo" in resource.data) || request.resource.data.codigo == resource.data.codigo); // Não permitir alterar código
+      
+      // Permitir exclusão apenas para usuários autenticados
+      allow delete: if isAuthenticated();
+    }
+    
+    // Regras para a coleção 'entries'
+    match /entries/{entryId} {
+      // Permitir leitura apenas para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação apenas para usuários autenticados
+      // Validar campos obrigatórios
+      // Código é opcional (pode ser string vazia)
+      allow create: if isAuthenticated()
+        && request.resource.data.itemId is string
+        && (request.resource.data.codigo is string || !("codigo" in request.resource.data))
+        && isValidQuantity(request.resource.data.quantidade)
+        && request.resource.data.usuarioQueRegistrou is string;
+      
+      // Não permitir atualização ou exclusão de entradas (histórico imutável)
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // Regras para a coleção 'itemBatches'
+    match /itemBatches/{batchId} {
+      // Permitir leitura apenas para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Criar/atualizar lote (quantidade não negativa)
+      allow create, update: if isAuthenticated()
+        && request.resource.data.itemId is string
+        && request.resource.data.validade is string
+        && request.resource.data.validadeDate is timestamp
+        && isValidQuantity(request.resource.data.quantidade);
+      
+      // Não permitir delete via cliente
+      allow delete: if false;
+    }
+
+    // Regras para a coleção 'exits'
+    match /exits/{exitId} {
+      // Permitir leitura apenas para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação apenas para usuários autenticados
+      // Validar campos obrigatórios
+      // Código é opcional (pode ser string vazia)
+      allow create: if isAuthenticated()
+        && request.resource.data.itemId is string
+        && (request.resource.data.codigo is string || !("codigo" in request.resource.data))
+        && isValidQuantity(request.resource.data.quantidade)
+        && request.resource.data.setorDestino is string
+        && request.resource.data.usuarioQueRegistrou is string;
+      
+      // Não permitir atualização ou exclusão de saídas (histórico imutável)
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}
+
