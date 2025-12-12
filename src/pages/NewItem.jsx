@@ -3,9 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { addItem, getItemByCodigo } from "../services/items";
 import { validateItem } from "../utils/validators";
 import { Save, X, Package } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { useToastContext } from "../context/ToastContext";
 
 const NewItem = () => {
   const navigate = useNavigate();
+  const { isAdmin, currentUser } = useAuth();
+  const { success, error: showError } = useToastContext();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [formData, setFormData] = useState({
@@ -69,18 +73,45 @@ const NewItem = () => {
 
     try {
       // Salvar com a quantidade informada pelo usuário
-      await addItem({
-        ...formData,
-        quantidade: parseFloat(formData.quantidade) || 0
-      });
+      await addItem(
+        {
+          ...formData,
+          quantidade: parseFloat(formData.quantidade) || 0,
+        },
+        currentUser?.uid
+      );
       
-      navigate("/items");
+      success("Item cadastrado com sucesso!");
+      setTimeout(() => {
+        navigate("/items");
+      }, 1000);
     } catch (error) {
-      setError("Erro ao cadastrar item: " + error.message);
+      showError("Erro ao cadastrar item: " + error.message);
     } finally {
       setLoading(false);
     }
   };
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h1 className="text-2xl font-bold text-gray-800 mb-4">Acesso restrito</h1>
+            <p className="text-gray-600">
+              Apenas o administrador pode cadastrar novos itens.
+            </p>
+            <button
+              onClick={() => navigate("/items")}
+              className="mt-4 px-4 py-2 rounded bg-blue-600 text-white"
+            >
+              Voltar para itens
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -100,8 +131,9 @@ const NewItem = () => {
           </div>
 
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-              {error}
+            <div className="alert-ring bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 relative">
+              <i></i>
+              <span className="relative z-10">{error}</span>
             </div>
           )}
 
@@ -240,10 +272,13 @@ const NewItem = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 disabled:opacity-50 transition"
+                className="action-button px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 disabled:opacity-50 transition relative overflow-hidden"
               >
-                <Save className="w-5 h-5" />
-                <span>{loading ? "Salvando..." : "Salvar"}</span>
+                <div className="action-button-ring">
+                  <i></i>
+                </div>
+                <Save className="w-5 h-5 relative z-10" />
+                <span className="relative z-10">{loading ? "Salvando..." : "Salvar"}</span>
               </button>
             </div>
           </form>

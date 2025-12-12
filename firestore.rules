@@ -6,6 +6,11 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
+
+    // Apenas este usuário pode escrever
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == "3Jq6h72lTWRL6KQEVqKLXHwF7ZG3";
+    }
     
     // Função auxiliar para verificar se a quantidade não é negativa
     function isValidQuantity(quantity) {
@@ -17,25 +22,25 @@ service cloud.firestore {
       // Permitir leitura apenas para usuários autenticados
       allow read: if isAuthenticated();
       
-      // Permitir criação apenas para usuários autenticados
+      // Permitir criação apenas para admin
       // Validar campos obrigatórios e quantidade não negativa
       // Código é opcional (pode ser string vazia ou não existir)
-      allow create: if isAuthenticated() 
+      allow create: if isAdmin() 
         && request.resource.data.nome is string
         && (request.resource.data.codigo is string || !("codigo" in request.resource.data))
         && isValidQuantity(request.resource.data.quantidade);
       
-      // Permitir atualização apenas para usuários autenticados
+      // Permitir atualização apenas para admin
       // Não permitir alteração manual da quantidade (deve ser feita via transactions)
       // Código é opcional mas não pode ser alterado se existir
-      allow update: if isAuthenticated()
+      allow update: if isAdmin()
         && request.resource.data.nome is string
         && (request.resource.data.codigo is string || !("codigo" in request.resource.data))
         && isValidQuantity(request.resource.data.quantidade)
         && (!("codigo" in request.resource.data) || !("codigo" in resource.data) || request.resource.data.codigo == resource.data.codigo); // Não permitir alterar código
       
-      // Permitir exclusão apenas para usuários autenticados
-      allow delete: if isAuthenticated();
+      // Permitir exclusão apenas para admin
+      allow delete: if isAdmin();
     }
     
     // Regras para a coleção 'entries'
@@ -43,10 +48,10 @@ service cloud.firestore {
       // Permitir leitura apenas para usuários autenticados
       allow read: if isAuthenticated();
       
-      // Permitir criação apenas para usuários autenticados
+      // Permitir criação apenas para admin
       // Validar campos obrigatórios
       // Código é opcional (pode ser string vazia)
-      allow create: if isAuthenticated()
+      allow create: if isAdmin()
         && request.resource.data.itemId is string
         && (request.resource.data.codigo is string || !("codigo" in request.resource.data))
         && isValidQuantity(request.resource.data.quantidade)
@@ -63,7 +68,7 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       
       // Criar/atualizar lote (quantidade não negativa)
-      allow create, update: if isAuthenticated()
+      allow create, update: if isAdmin()
         && request.resource.data.itemId is string
         && request.resource.data.validade is string
         && request.resource.data.validadeDate is timestamp
@@ -78,10 +83,10 @@ service cloud.firestore {
       // Permitir leitura apenas para usuários autenticados
       allow read: if isAuthenticated();
       
-      // Permitir criação apenas para usuários autenticados
+      // Permitir criação apenas para admin
       // Validar campos obrigatórios
       // Código é opcional (pode ser string vazia)
-      allow create: if isAuthenticated()
+      allow create: if isAdmin()
         && request.resource.data.itemId is string
         && (request.resource.data.codigo is string || !("codigo" in request.resource.data))
         && isValidQuantity(request.resource.data.quantidade)

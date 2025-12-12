@@ -5,21 +5,28 @@ import { VENCIMENTO_PROXIMO_DIAS } from "../config/constants";
  * @param {string|Date|Timestamp} validade - Data de validade
  * @returns {Object} { isExpiring: boolean, daysUntilExpiry: number, isExpired: boolean }
  */
-export const checkExpiringDate = (validade) => {
-  if (!validade) {
-    return { isExpiring: false, daysUntilExpiry: null, isExpired: false };
+const parseLocalDate = (validade) => {
+  if (!validade) return null;
+
+  if (validade.toDate) {
+    return validade.toDate();
   }
 
-  let expiryDate;
-  
-  // Converter para Date se for Timestamp do Firestore
-  if (validade.toDate) {
-    expiryDate = validade.toDate();
-  } else if (typeof validade === 'string') {
-    expiryDate = new Date(validade);
-  } else if (validade instanceof Date) {
-    expiryDate = validade;
-  } else {
+  if (typeof validade === "string") {
+    // Evita conversão para UTC que desloca um dia em fuso -3
+    return new Date(`${validade}T00:00:00`);
+  }
+
+  if (validade instanceof Date) {
+    return validade;
+  }
+
+  return null;
+};
+
+export const checkExpiringDate = (validade) => {
+  const expiryDate = parseLocalDate(validade);
+  if (!expiryDate || Number.isNaN(expiryDate.getTime())) {
     return { isExpiring: false, daysUntilExpiry: null, isExpired: false };
   }
 
@@ -36,7 +43,7 @@ export const checkExpiringDate = (validade) => {
   return {
     isExpiring,
     isExpired,
-    daysUntilExpiry: diffDays
+    daysUntilExpiry: diffDays,
   };
 };
 
@@ -48,16 +55,8 @@ export const checkExpiringDate = (validade) => {
 export const formatExpiryDate = (validade) => {
   if (!validade) return "Sem validade";
 
-  let dateObj;
-  if (validade.toDate) {
-    dateObj = validade.toDate();
-  } else if (typeof validade === 'string') {
-    dateObj = new Date(validade);
-  } else if (validade instanceof Date) {
-    dateObj = validade;
-  } else {
-    return "Data inválida";
-  }
+  const dateObj = parseLocalDate(validade);
+  if (!dateObj || Number.isNaN(dateObj.getTime())) return "Data inválida";
 
   return dateObj.toLocaleDateString("pt-BR");
 };

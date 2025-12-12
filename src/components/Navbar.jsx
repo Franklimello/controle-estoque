@@ -11,11 +11,12 @@ import {
   Menu,
   X,
   User,
+  Lock,
 } from "lucide-react";
 import logoPrefeitura from "../assets/prefeiturajpg.png";
 
 const Navbar = () => {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -33,12 +34,22 @@ const Navbar = () => {
   };
 
   const navLinks = [
-    { to: "/dashboard", icon: Home, label: "Dashboard" },
-    { to: "/items", icon: List, label: "Itens" },
-    { to: "/entry", icon: ArrowDownCircle, label: "Entrada" },
-    { to: "/exit", icon: ArrowUpCircle, label: "Saída" },
-    { to: "/entries-history", icon: History, label: "Hist. Entradas" },
-    { to: "/exits-history", icon: History, label: "Hist. Saídas" },
+    { to: "/dashboard", icon: Home, label: "Dashboard", adminOnly: false },
+    { to: "/items", icon: List, label: "Itens", adminOnly: false },
+    { to: "/entry", icon: ArrowDownCircle, label: "Entrada", adminOnly: true },
+    { to: "/exit", icon: ArrowUpCircle, label: "Saída", adminOnly: true },
+    {
+      to: "/entries-history",
+      icon: History,
+      label: "Hist. Entradas",
+      adminOnly: false,
+    },
+    {
+      to: "/exits-history",
+      icon: History,
+      label: "Hist. Saídas",
+      adminOnly: false,
+    },
   ];
 
   return (
@@ -76,56 +87,26 @@ const Navbar = () => {
             </div>
           </Link>
 
-          {/* Menu Desktop */}
+          {/* Usuário e Logout Desktop */}
           {currentUser && (
             <>
-              <div className="hidden lg:flex items-center space-x-2 overflow-hidden">
-                {navLinks.map((link) => {
-                  const Icon = link.icon;
-                  const active = isActive(link.to);
-                  return (
-                    <Link
-                      key={link.to}
-                      to={link.to}
-                      className={`group relative flex items-center space-x-2 px-4 py-2.5 rounded-xl transition-all duration-300 ${
-                        active
-                          ? "bg-gradient-to-r from-red-600 to-red-500 shadow-lg shadow-red-500/25"
-                          : "hover:bg-slate-700/50"
-                      }`}
-                    >
-                      {active && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-red-600 to-red-500 rounded-xl blur opacity-50"></div>
-                      )}
-                      <Icon
-                        className={`w-4 h-4 relative z-10 ${
-                          active
-                            ? "text-white"
-                            : "text-slate-400 group-hover:text-white"
-                        } transition-colors`}
-                      />
-                      <span
-                        className={`text-sm font-medium relative z-10 ${
-                          active
-                            ? "text-white"
-                            : "text-slate-300 group-hover:text-white"
-                        } transition-colors`}
-                      >
-                        {link.label}
-                      </span>
-                    </Link>
-                  );
-                })}
-              </div>
-
-              {/* Usuário e Logout Desktop */}
               <div className="hidden lg:flex items-center space-x-3">
                 <div className="flex items-center space-x-2 bg-slate-800/50 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-slate-700/50 shadow-lg">
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-lg">
-                    <User className="w-4 h-4 text-white" />
+                    {isAdmin ? (
+                      <User className="w-4 h-4 text-white" />
+                    ) : (
+                      <Lock className="w-4 h-4 text-white" />
+                    )}
                   </div>
                   <span className="text-sm font-medium text-slate-200 max-w-xs truncate">
                     {currentUser.email}
                   </span>
+                  {!isAdmin && (
+                    <span className="text-[11px] font-semibold text-yellow-200 bg-yellow-600/20 border border-yellow-500/40 px-2 py-0.5 rounded">
+                      Somente leitura
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={handleLogout}
@@ -157,7 +138,9 @@ const Navbar = () => {
         {currentUser && mobileMenuOpen && (
           <div className="lg:hidden pb-4 border-t border-slate-700/50 mt-2 pt-4 animate-in slide-in-from-top duration-300">
             <div className="space-y-1.5">
-              {navLinks.map((link) => {
+              {navLinks
+                .filter((link) => (link.adminOnly ? isAdmin : true))
+                .map((link) => {
                 const Icon = link.icon;
                 const active = isActive(link.to);
                 return (
@@ -189,7 +172,11 @@ const Navbar = () => {
               <div className="pt-4 border-t border-slate-700/50 mt-4 space-y-2">
                 <div className="flex items-center space-x-3 px-4 py-3 bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50">
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center">
-                    <User className="w-4 h-4 text-white" />
+                    {isAdmin ? (
+                      <User className="w-4 h-4 text-white" />
+                    ) : (
+                      <Lock className="w-4 h-4 text-white" />
+                    )}
                   </div>
                   <span className="text-sm font-medium text-slate-200 truncate">
                     {currentUser.email}

@@ -6,7 +6,10 @@ import {
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { ItemsProvider } from "./context/ItemsContext";
+import { ToastProvider } from "./context/ToastContext";
 import Navbar from "./components/Navbar";
+import Sidebar from "./components/Sidebar";
+import ErrorBoundary from "./components/ErrorBoundary";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Items from "./pages/Items";
@@ -25,7 +28,10 @@ const PrivateRoute = ({ children }) => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="loading-ring">
+            <i></i>
+            <i></i>
+          </div>
           <p className="mt-4 text-gray-600">Carregando...</p>
         </div>
       </div>
@@ -39,79 +45,88 @@ function App() {
   return (
     <AuthProvider>
       <ItemsProvider>
-        <Router>
-          <div className="min-h-screen bg-gray-50" translate="no">
-            <Navbar />
-            <Routes>
-              <Route path="/login" element={<Login />} />
-              <Route
-                path="/dashboard"
-                element={
-                  <PrivateRoute>
-                    <Dashboard />
-                  </PrivateRoute>
-                }
-              />
-              <Route
-                path="/items"
-                element={
-                  <PrivateRoute>
-                    <Items />
-                  </PrivateRoute>
-                }
-              />
-              <Route
-                path="/new-item"
-                element={
-                  <PrivateRoute>
-                    <NewItem />
-                  </PrivateRoute>
-                }
-              />
-              <Route
-                path="/edit-item/:id"
-                element={
-                  <PrivateRoute>
-                    <EditItem />
-                  </PrivateRoute>
-                }
-              />
-              <Route
-                path="/entry"
-                element={
-                  <PrivateRoute>
-                    <Entry />
-                  </PrivateRoute>
-                }
-              />
-              <Route
-                path="/exit"
-                element={
-                  <PrivateRoute>
-                    <Exit />
-                  </PrivateRoute>
-                }
-              />
-              <Route
-                path="/entries-history"
-                element={
-                  <PrivateRoute>
-                    <EntriesHistory />
-                  </PrivateRoute>
-                }
-              />
-              <Route
-                path="/exits-history"
-                element={
-                  <PrivateRoute>
-                    <ExitsHistory />
-                  </PrivateRoute>
-                }
-              />
-              <Route path="/" element={<Navigate to="/items" />} />
-            </Routes>
-          </div>
-        </Router>
+        <ToastProvider>
+          <Router>
+            <ErrorBoundary>
+              <div className="min-h-screen bg-gray-50" translate="no">
+                <Navbar />
+                <div className="flex">
+                  <Sidebar />
+                  <div className="flex-1">
+                    <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route
+                  path="/dashboard"
+                  element={
+                    <PrivateRoute>
+                      <Dashboard />
+                    </PrivateRoute>
+                  }
+                />
+                <Route
+                  path="/items"
+                  element={
+                    <PrivateRoute>
+                      <Items />
+                    </PrivateRoute>
+                  }
+                />
+                <Route
+                  path="/new-item"
+                  element={
+                    <PrivateRoute>
+                      <NewItem />
+                    </PrivateRoute>
+                  }
+                />
+                <Route
+                  path="/edit-item/:id"
+                  element={
+                    <PrivateRoute>
+                      <EditItem />
+                    </PrivateRoute>
+                  }
+                />
+                <Route
+                  path="/entry"
+                  element={
+                    <PrivateRoute>
+                      <Entry />
+                    </PrivateRoute>
+                  }
+                />
+                <Route
+                  path="/exit"
+                  element={
+                    <PrivateRoute>
+                      <Exit />
+                    </PrivateRoute>
+                  }
+                />
+                <Route
+                  path="/entries-history"
+                  element={
+                    <PrivateRoute>
+                      <EntriesHistory />
+                    </PrivateRoute>
+                  }
+                />
+                <Route
+                  path="/exits-history"
+                  element={
+                    <PrivateRoute>
+                      <ExitsHistory />
+                    </PrivateRoute>
+                  }
+                />
+                <Route path="/" element={<Navigate to="/items" />} />
+                    </Routes>
+                  </div>
+                </div>
+              </div>
+            </ErrorBoundary>
+          </Router>
+        </ToastProvider>
       </ItemsProvider>
     </AuthProvider>
   );

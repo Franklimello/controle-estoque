@@ -50,7 +50,10 @@ const Dashboard = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="loading-ring">
+            <i></i>
+            <i></i>
+          </div>
           <p className="mt-4 text-gray-600">Carregando...</p>
         </div>
       </div>
@@ -64,8 +67,12 @@ const Dashboard = () => {
 
         {/* Cards de Resumo */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
+          <div className="bg-white rounded-lg shadow-md p-6 relative overflow-hidden">
+            <div className="dashboard-card-ring text-blue-600">
+              <i></i>
+              <i></i>
+            </div>
+            <div className="flex items-center justify-between relative z-10">
               <div>
                 <p className="text-gray-600 text-sm">Total de Itens</p>
                 <p className="text-3xl font-bold text-gray-800 mt-2">{items.length}</p>
@@ -74,8 +81,12 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
+          <div className="bg-white rounded-lg shadow-md p-6 relative overflow-hidden">
+            <div className="dashboard-card-ring text-green-600">
+              <i></i>
+              <i></i>
+            </div>
+            <div className="flex items-center justify-between relative z-10">
               <div>
                 <p className="text-gray-600 text-sm">Entradas Hoje</p>
                 <p className="text-3xl font-bold text-green-600 mt-2">{totalEntriesToday}</p>
@@ -84,8 +95,12 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
+          <div className="bg-white rounded-lg shadow-md p-6 relative overflow-hidden">
+            <div className="dashboard-card-ring text-red-600">
+              <i></i>
+              <i></i>
+            </div>
+            <div className="flex items-center justify-between relative z-10">
               <div>
                 <p className="text-gray-600 text-sm">Saídas Hoje</p>
                 <p className="text-3xl font-bold text-red-600 mt-2">{totalExitsToday}</p>
@@ -94,8 +109,12 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
+          <div className="bg-white rounded-lg shadow-md p-6 relative overflow-hidden">
+            <div className="dashboard-card-ring text-orange-600">
+              <i></i>
+              <i></i>
+            </div>
+            <div className="flex items-center justify-between relative z-10">
               <div>
                 <p className="text-gray-600 text-sm">Estoque Baixo</p>
                 <p className="text-3xl font-bold text-orange-600 mt-2">{lowStockItems.length}</p>
@@ -104,8 +123,12 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <div className="flex items-center justify-between">
+          <div className="bg-white rounded-lg shadow-md p-6 relative overflow-hidden">
+            <div className="dashboard-card-ring text-red-600">
+              <i></i>
+              <i></i>
+            </div>
+            <div className="flex items-center justify-between relative z-10">
               <div>
                 <p className="text-gray-600 text-sm">Vencimento Próximo</p>
                 <p className="text-3xl font-bold text-red-600 mt-2">{expiringItems.length}</p>
@@ -154,30 +177,38 @@ const Dashboard = () => {
               <p className="text-gray-500 text-center py-4">Nenhum item próximo do vencimento</p>
             ) : (
               <div className="space-y-3">
-                {expiringItems.slice(0, 5).map((item) => {
+                {expiringItems.slice(0, 5).map((item,index) => {
                   const expiryInfo = checkExpiringDate(item.validade);
                   return (
                     <div
-                      key={item.id}
+                      key={`exp-${item.id}-${index}`}
                       className={`flex items-center justify-between p-3 rounded-lg border-l-4 ${
-                        expiryInfo.isExpired 
-                          ? "bg-red-50 border-red-500" 
+                        expiryInfo.isExpired
+                          ? "bg-red-50 border-red-500"
                           : "bg-orange-50 border-orange-500"
                       }`}
                     >
                       <div>
-                        <p className="font-semibold text-gray-800">{item.nome}</p>
-                        <p className="text-sm text-gray-600">Código: {item.codigo || "Sem código"}</p>
+                        <p className="font-semibold text-gray-800">
+                          {item.nome}
+                        </p>
+                        <p className="text-sm text-gray-600">
+                          Código: {item.codigo || "Sem código"}
+                        </p>
                         <p className="text-xs text-gray-500">
                           Validade: {formatExpiryDate(item.validade)}
                         </p>
                       </div>
                       <div className="text-right">
-                        <span className={`text-lg font-bold ${
-                          expiryInfo.isExpired ? "text-red-600" : "text-orange-600"
-                        }`}>
-                          {expiryInfo.isExpired 
-                            ? "VENCIDO" 
+                        <span
+                          className={`text-lg font-bold ${
+                            expiryInfo.isExpired
+                              ? "text-red-600"
+                              : "text-orange-600"
+                          }`}
+                        >
+                          {expiryInfo.isExpired
+                            ? "VENCIDO"
                             : `${expiryInfo.daysUntilExpiry} dias`}
                         </span>
                         <p className="text-xs text-gray-500">

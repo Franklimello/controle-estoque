@@ -2,9 +2,10 @@ import { createContext, useContext, useState, useEffect } from "react";
 import {
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
 } from "firebase/auth";
 import { auth } from "../services/firebase";
+import { ADMIN_UID } from "../config/constants";
 
 const AuthContext = createContext({});
 
@@ -19,10 +20,12 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
+      setIsAdmin(user?.uid === ADMIN_UID);
       setLoading(false);
     });
 
@@ -49,6 +52,7 @@ export const AuthProvider = ({ children }) => {
 
   const value = {
     currentUser,
+    isAdmin,
     login,
     logout,
     loading

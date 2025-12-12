@@ -1,17 +1,20 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { useToastContext } from "../context/ToastContext";
 import { addEntry } from "../services/entries";
 import { getItemByCodigo } from "../services/items";
 import { validateEntry } from "../utils/validators";
-import { ArrowDownCircle, Save, X } from "lucide-react";
+import { ArrowDownCircle, Save, X, Package } from "lucide-react";
+import Modal from "../components/Modal";
 
 const Entry = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, isAdmin } = useAuth();
   const navigate = useNavigate();
+  const { success, error: showError } = useToastContext();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const [itemFound, setItemFound] = useState(null);
   const [formData, setFormData] = useState({
     codigo: "",
@@ -60,12 +63,7 @@ const Entry = () => {
     }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
-    setLoading(true);
-
+  const processEntry = async () => {
     const validation = validateEntry({
       codigo: formData.codigo,
       nome: formData.nome,
@@ -74,19 +72,7 @@ const Entry = () => {
 
     if (!validation.isValid) {
       setError(validation.errors.join(", "));
-      setLoading(false);
-      return;
-    }
-
-    // Se item não existe e há código, perguntar se deseja criar
-    if (!itemFound && formData.codigo && formData.codigo.trim().length > 0) {
-      const confirmCreate = window.confirm(
-        "Item não encontrado. Deseja criar um novo item com este código?"
-      );
-      if (!confirmCreate) {
-        setLoading(false);
-        return;
-      }
+      return false;
     }
 
     // Se não há código, nome é obrigatório
@@ -95,8 +81,7 @@ const Entry = () => {
       (!formData.nome || formData.nome.trim().length === 0)
     ) {
       setError("Nome do item é obrigatório quando não há código de barras");
-      setLoading(false);
-      return;
+      return false;
     }
 
     try {
@@ -115,7 +100,7 @@ const Entry = () => {
         currentUser.uid
       );
 
-      setSuccess("Entrada registrada com sucesso!");
+      success("Entrada registrada com sucesso!");
 
       // Limpar formulário
       setTimeout(() => {
@@ -131,19 +116,75 @@ const Entry = () => {
           validade: "",
         });
         setItemFound(null);
-        setSuccess("");
-      }, 2000);
+      }, 1000);
+      return true;
     } catch (error) {
-      setError("Erro ao registrar entrada: " + error.message);
-    } finally {
-      setLoading(false);
+      showError("Erro ao registrar entrada: " + error.message);
+      return false;
     }
   };
 
+  const handleConfirmCreate = async () => {
+    setShowCreateModal(false);
+    setLoading(true);
+    setError("");
+    await processEntry();
+    setLoading(false);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    const validation = validateEntry({
+      codigo: formData.codigo,
+      nome: formData.nome,
+      quantidade: parseFloat(formData.quantidade),
+    });
+
+    if (!validation.isValid) {
+      setError(validation.errors.join(", "));
+      setLoading(false);
+      return;
+    }
+
+    // Se item não existe e há código, mostrar modal para criar
+    if (!itemFound && formData.codigo && formData.codigo.trim().length > 0) {
+      setShowCreateModal(true);
+      setLoading(false);
+      return;
+    }
+
+    await processEntry();
+    setLoading(false);
+  };
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h1 className="text-2xl font-bold text-gray-800 mb-4">Acesso restrito</h1>
+            <p className="text-gray-600">
+              Apenas o administrador pode registrar entradas.
+            </p>
+            <button
+              onClick={() => navigate("/items")}
+              className="mt-4 px-4 py-2 rounded bg-blue-600 text-white"
+            >
+              Voltar para itens
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-2xl mx-auto">
-        <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="min-h-screen bg-gray-50 p-4 lg:p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-white rounded-lg shadow-md p-4 lg:p-8">
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold text-gray-800 flex items-center">
               <ArrowDownCircle className="w-6 h-6 mr-2 text-green-600" />
@@ -158,16 +199,12 @@ const Entry = () => {
           </div>
 
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-              {error}
+            <div className="alert-ring bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 relative">
+              <i></i>
+              <span className="relative z-10">{error}</span>
             </div>
           )}
 
-          {success && (
-            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-              {success}
-            </div>
-          )}
 
           {itemFound && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
@@ -198,29 +235,29 @@ const Entry = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} noValidate className="space-y-4">
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">
-                Código de Barras
-              </label>
-              <input
-                type="text"
-                name="codigo"
-                value={formData.codigo}
-                onChange={handleCodigoChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                placeholder="Digite ou escaneie o código (opcional)"
-                autoFocus
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Deixe em branco se o item não tiver código de barras
-              </p>
-            </div>
+          <form onSubmit={handleSubmit} noValidate className="space-y-3 lg:space-y-4">
+            <div className="lg:grid lg:grid-cols-2 lg:gap-6">
+              <div>
+                <label className="block text-gray-700 text-sm font-bold mb-2">
+                  Código de Barras
+                </label>
+                <input
+                  type="text"
+                  name="codigo"
+                  value={formData.codigo}
+                  onChange={handleCodigoChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="Digite ou escaneie o código (opcional)"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Deixe em branco se o item não tiver código de barras
+                </p>
+              </div>
 
-            {(!itemFound ||
-              !formData.codigo ||
-              formData.codigo.trim().length === 0) && (
-              <>
+              {(!itemFound ||
+                !formData.codigo ||
+                formData.codigo.trim().length === 0) && (
                 <div>
                   <label className="block text-gray-700 text-sm font-bold mb-2">
                     Nome do Item{" "}
@@ -235,7 +272,6 @@ const Entry = () => {
                     onChange={handleChange}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                     placeholder="Nome do item"
-                    // validação custom via JS (sem required nativo)
                   />
                   {(!formData.codigo ||
                     formData.codigo.trim().length === 0) && (
@@ -244,39 +280,43 @@ const Entry = () => {
                     </p>
                   )}
                 </div>
+              )}
+            </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-gray-700 text-sm font-bold mb-2">
-                      Categoria
-                    </label>
-                    <input
-                      type="text"
-                      name="categoria"
-                      value={formData.categoria}
-                      onChange={handleChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
+            {(!itemFound ||
+              !formData.codigo ||
+              formData.codigo.trim().length === 0) && (
+              <div className="lg:grid lg:grid-cols-3 lg:gap-6">
+                <div>
+                  <label className="block text-gray-700 text-sm font-bold mb-2">
+                    Categoria
+                  </label>
+                  <input
+                    type="text"
+                    name="categoria"
+                    value={formData.categoria}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
 
-                  <div>
-                    <label className="block text-gray-700 text-sm font-bold mb-2">
-                      Unidade
-                    </label>
-                    <select
-                      name="unidade"
-                      value={formData.unidade}
-                      onChange={handleChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    >
-                      <option value="UN">UN</option>
-                      <option value="KG">KG</option>
-                      <option value="LT">LT</option>
-                      <option value="MT">MT</option>
-                      <option value="CX">CX</option>
-                      <option value="PC">PC</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-gray-700 text-sm font-bold mb-2">
+                    Unidade
+                  </label>
+                  <select
+                    name="unidade"
+                    value={formData.unidade}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="UN">UN</option>
+                    <option value="KG">KG</option>
+                    <option value="LT">LT</option>
+                    <option value="MT">MT</option>
+                    <option value="CX">CX</option>
+                    <option value="PC">PC</option>
+                  </select>
                 </div>
 
                 <div>
@@ -291,51 +331,53 @@ const Entry = () => {
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>
-              </>
+              </div>
             )}
 
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">
-                Quantidade *
-              </label>
-              <input
-                type="number"
-                name="quantidade"
-                value={formData.quantidade}
-                onChange={handleChange}
-                step="0.01"
-                min="0.01"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-            </div>
+            <div className="lg:grid lg:grid-cols-3 lg:gap-6">
+              <div>
+                <label className="block text-gray-700 text-sm font-bold mb-2">
+                  Quantidade *
+                </label>
+                <input
+                  type="number"
+                  name="quantidade"
+                  value={formData.quantidade}
+                  onChange={handleChange}
+                  step="0.01"
+                  min="0.01"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
 
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">
-                Validade *
-              </label>
-              <input
-                type="date"
-                name="validade"
-                value={formData.validade}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Data de validade do lote que está entrando
-              </p>
-            </div>
+              <div>
+                <label className="block text-gray-700 text-sm font-bold mb-2">
+                  Validade *
+                </label>
+                <input
+                  type="date"
+                  name="validade"
+                  value={formData.validade}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Data de validade do lote
+                </p>
+              </div>
 
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">
-                Fornecedor
-              </label>
-              <input
-                type="text"
-                name="fornecedor"
-                value={formData.fornecedor}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
+              <div>
+                <label className="block text-gray-700 text-sm font-bold mb-2">
+                  Fornecedor
+                </label>
+                <input
+                  type="text"
+                  name="fornecedor"
+                  value={formData.fornecedor}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
             </div>
 
             <div>
@@ -362,15 +404,49 @@ const Entry = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2 disabled:opacity-50 transition"
+                className="action-button px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2 disabled:opacity-50 transition relative overflow-hidden"
               >
-                <Save className="w-5 h-5" />
-                <span>{loading ? "Registrando..." : "Registrar Entrada"}</span>
+                <div className="action-button-ring">
+                  <i></i>
+                </div>
+                <Save className="w-5 h-5 relative z-10" />
+                <span className="relative z-10">{loading ? "Registrando..." : "Registrar Entrada"}</span>
               </button>
             </div>
           </form>
         </div>
       </div>
+
+      {/* Modal de Confirmação de Criação */}
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        title="Criar Novo Item"
+        confirmText="Criar e Registrar Entrada"
+        cancelText="Cancelar"
+        onConfirm={handleConfirmCreate}
+        confirmVariant="success"
+        showConfirm={true}
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 text-blue-600">
+            <Package className="w-8 h-8" />
+            <p className="text-lg font-semibold">Item não encontrado</p>
+          </div>
+          <p className="text-gray-700">
+            O código de barras <strong>"{formData.codigo}"</strong> não foi encontrado no sistema.
+          </p>
+          <p className="text-gray-700">
+            Deseja criar um novo item com este código e registrar a entrada?
+          </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-sm text-blue-800">
+              <strong>ℹ️ Informação:</strong> Um novo item será criado automaticamente com os dados informados.
+            </p>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

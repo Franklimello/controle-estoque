@@ -1,0 +1,340 @@
+/* ============================================
+   ANIMAÇÕES REUTILIZÁVEIS - ESTILO ANÉIS
+   ============================================ */
+
+/* Anel rotativo pequeno (para cards, badges, etc) */
+.ring-animation-small {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.ring-animation-small i {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-radius: 38% 62% 63% 37% / 41% 44% 56% 59%;
+  animation: ring-rotate 4s linear infinite;
+}
+
+.ring-animation-small i:nth-child(2) {
+  border-radius: 41% 44% 56% 59% / 38% 62% 63% 37%;
+  animation: ring-rotate-reverse 6s linear infinite;
+  opacity: 0.5;
+}
+
+.ring-animation-small:hover i {
+  border-color: var(--ring-color, #3b82f6);
+  filter: drop-shadow(0 0 10px var(--ring-color, #3b82f6));
+}
+
+/* Anel rotativo médio (para modais, confirmações) */
+.ring-animation-medium {
+  position: relative;
+  width: 200px;
+  height: 200px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.ring-animation-medium i {
+  position: absolute;
+  inset: 0;
+  border: 3px solid rgba(239, 68, 68, 0.3);
+  transition: 0.5s;
+}
+
+.ring-animation-medium i:nth-child(1) {
+  border-radius: 38% 62% 63% 37% / 41% 44% 56% 59%;
+  animation: ring-rotate 5s linear infinite;
+}
+
+.ring-animation-medium i:nth-child(2) {
+  border-radius: 41% 44% 56% 59% / 38% 62% 63% 37%;
+  animation: ring-rotate-reverse 7s linear infinite;
+}
+
+.ring-animation-medium i:nth-child(3) {
+  border-radius: 41% 44% 56% 59% / 38% 62% 63% 37%;
+  animation: ring-rotate 9s linear infinite;
+  opacity: 0.4;
+}
+
+/* Anel para cards do dashboard */
+.dashboard-card-ring {
+  position: absolute;
+  top: -20px;
+  right: -20px;
+  width: 100px;
+  height: 100px;
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+.dashboard-card-ring i {
+  position: absolute;
+  inset: 0;
+  border: 2px solid currentColor;
+  border-radius: 38% 62% 63% 37% / 41% 44% 56% 59%;
+  animation: ring-rotate-slow 8s linear infinite;
+}
+
+.dashboard-card-ring i:nth-child(2) {
+  border-radius: 41% 44% 56% 59% / 38% 62% 63% 37%;
+  animation: ring-rotate-reverse-slow 12s linear infinite;
+  opacity: 0.5;
+}
+
+/* Anel para botões de ação */
+.action-button-ring {
+  position: absolute;
+  inset: -5px;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.action-button-ring i {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-radius: 38% 62% 63% 37% / 41% 44% 56% 59%;
+  animation: ring-rotate-fast 3s linear infinite;
+}
+
+.action-button:hover .action-button-ring {
+  opacity: 1;
+}
+
+/* Anel para loading states */
+.loading-ring {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  margin: 0 auto;
+}
+
+.loading-ring i {
+  position: absolute;
+  inset: 0;
+  border: 3px solid transparent;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: ring-spin 1s linear infinite;
+}
+
+.loading-ring i:nth-child(2) {
+  border-top-color: #ef4444;
+  animation: ring-spin-reverse 1.5s linear infinite;
+  opacity: 0.7;
+}
+
+/* Anel para badges de status */
+.status-badge-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+.status-badge-ring i {
+  position: absolute;
+  inset: 0;
+  border: 1px solid currentColor;
+  border-radius: 38% 62% 63% 37% / 41% 44% 56% 59%;
+  animation: ring-pulse 2s ease-in-out infinite;
+}
+
+/* Animações base */
+@keyframes ring-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ring-rotate-reverse {
+  0% {
+    transform: rotate(360deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes ring-rotate-slow {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ring-rotate-reverse-slow {
+  0% {
+    transform: rotate(360deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes ring-rotate-fast {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ring-spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ring-spin-reverse {
+  0% {
+    transform: rotate(360deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+@keyframes ring-pulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
+}
+
+/* Anel para item cards */
+.item-card-ring {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 50px;
+  height: 50px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  pointer-events: none;
+}
+
+.item-card:hover .item-card-ring {
+  opacity: 0.2;
+}
+
+.item-card-ring i {
+  position: absolute;
+  inset: 0;
+  border: 2px solid currentColor;
+  border-radius: 38% 62% 63% 37% / 41% 44% 56% 59%;
+  animation: ring-rotate 4s linear infinite;
+}
+
+.item-card-ring i:nth-child(2) {
+  border-radius: 41% 44% 56% 59% / 38% 62% 63% 37%;
+  animation: ring-rotate-reverse 6s linear infinite;
+  opacity: 0.5;
+}
+
+/* Anel para navbar (sutil) */
+.navbar-ring {
+  position: absolute;
+  top: 50%;
+  right: 20px;
+  transform: translateY(-50%);
+  width: 30px;
+  height: 30px;
+  opacity: 0.1;
+  pointer-events: none;
+}
+
+.navbar-ring i {
+  position: absolute;
+  inset: 0;
+  border: 1px solid currentColor;
+  border-radius: 38% 62% 63% 37% / 41% 44% 56% 59%;
+  animation: ring-rotate-slow 10s linear infinite;
+}
+
+/* Anel para modais */
+.modal-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 300px;
+  height: 300px;
+  opacity: 0.05;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.modal-ring i {
+  position: absolute;
+  inset: 0;
+  border: 3px solid currentColor;
+  border-radius: 38% 62% 63% 37% / 41% 44% 56% 59%;
+  animation: ring-rotate 6s linear infinite;
+}
+
+.modal-ring i:nth-child(2) {
+  border-radius: 41% 44% 56% 59% / 38% 62% 63% 37%;
+  animation: ring-rotate-reverse 8s linear infinite;
+}
+
+.modal-ring i:nth-child(3) {
+  border-radius: 41% 44% 56% 59% / 38% 62% 63% 37%;
+  animation: ring-rotate 10s linear infinite;
+  opacity: 0.4;
+}
+
+/* Anel para alertas/notificações */
+.alert-ring {
+  position: absolute;
+  inset: -10px;
+  border-radius: inherit;
+  opacity: 0.2;
+  pointer-events: none;
+}
+
+.alert-ring i {
+  position: absolute;
+  inset: 0;
+  border: 2px solid currentColor;
+  border-radius: 38% 62% 63% 37% / 41% 44% 56% 59%;
+  animation: ring-pulse 2s ease-in-out infinite;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .ring-animation-medium {
+    width: 150px;
+    height: 150px;
+  }
+  
+  .dashboard-card-ring {
+    width: 70px;
+    height: 70px;
+  }
+}
+

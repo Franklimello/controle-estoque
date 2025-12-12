@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useItems } from "../context/ItemsContext";
+import { useToastContext } from "../context/ToastContext";
 import { addExit } from "../services/exits";
 import { getItemByCodigo } from "../services/items";
 import { validateExit } from "../utils/validators";
@@ -9,12 +10,12 @@ import { ArrowUpCircle, Save, X, AlertTriangle, Search } from "lucide-react";
 import { ESTOQUE_BAIXO_LIMITE } from "../config/constants";
 
 const Exit = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, isAdmin } = useAuth();
   const { items } = useItems();
   const navigate = useNavigate();
+  const { success, error: showError } = useToastContext();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
   const [itemFound, setItemFound] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [formData, setFormData] = useState({
@@ -53,7 +54,6 @@ const Exit = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    setSuccess("");
     setLoading(true);
 
     const validation = validateExit({
@@ -103,7 +103,7 @@ const Exit = () => {
         currentUser.uid
       );
 
-      setSuccess("Saída registrada com sucesso!");
+      success("Saída registrada com sucesso!");
 
       // Limpar formulário
       setTimeout(() => {
@@ -116,10 +116,9 @@ const Exit = () => {
           observacao: "",
         });
         setItemFound(null);
-        setSuccess("");
-      }, 2000);
+      }, 1000);
     } catch (error) {
-      setError("Erro ao registrar saída: " + error.message);
+      showError("Erro ao registrar saída: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -149,10 +148,31 @@ const Exit = () => {
       .slice(0, 8);
   }, [items, searchTerm]);
 
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h1 className="text-2xl font-bold text-gray-800 mb-4">Acesso restrito</h1>
+            <p className="text-gray-600">
+              Apenas o administrador pode registrar saídas.
+            </p>
+            <button
+              onClick={() => navigate("/items")}
+              className="mt-4 px-4 py-2 rounded bg-blue-600 text-white"
+            >
+              Voltar para itens
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-2xl mx-auto">
-        <div className="bg-white rounded-lg shadow-md p-6">
+    <div className="min-h-screen bg-gray-50 p-4 lg:p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-white rounded-lg shadow-md p-4 lg:p-8">
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold text-gray-800 flex items-center">
               <ArrowUpCircle className="w-6 h-6 mr-2 text-red-600" />
@@ -167,16 +187,12 @@ const Exit = () => {
           </div>
 
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-              {error}
+            <div className="alert-ring bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 relative">
+              <i></i>
+              <span className="relative z-10">{error}</span>
             </div>
           )}
 
-          {success && (
-            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
-              {success}
-            </div>
-          )}
 
           {itemFound && (
             <div
@@ -255,125 +271,127 @@ const Exit = () => {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} noValidate className="space-y-4">
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">
-                Código de Barras
-              </label>
-              <input
-                type="text"
-                name="codigo"
-                value={formData.codigo}
-                onChange={handleCodigoChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                placeholder="Digite ou escaneie o código (opcional)"
-                autoFocus
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Deixe em branco se o item não tiver código de barras.
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">
-                Buscar Item (nome ou código)
-              </label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <form onSubmit={handleSubmit} noValidate className="space-y-3 lg:space-y-4">
+            <div className="lg:grid lg:grid-cols-2 lg:gap-6">
+              <div>
+                <label className="block text-gray-700 text-sm font-bold mb-2">
+                  Código de Barras
+                </label>
                 <input
                   type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                  placeholder="Digite parte do nome ou código"
+                  name="codigo"
+                  value={formData.codigo}
+                  onChange={handleCodigoChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="Digite ou escaneie o código (opcional)"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Deixe em branco se o item não tiver código de barras.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-gray-700 text-sm font-bold mb-2">
+                  Buscar Item (nome ou código)
+                </label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <input
+                    type="text"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                    placeholder="Digite parte do nome ou código"
+                  />
+                </div>
+
+                {searchTerm.trim().length > 0 && (
+                  <div className="mt-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y">
+                    {filteredItems.map((it) => (
+                      <button
+                        type="button"
+                        key={it.id}
+                        onClick={() => {
+                          setItemFound(it);
+                          setFormData((prev) => ({
+                            ...prev,
+                            itemId: it.id,
+                            codigo: it.codigo || "",
+                          }));
+                          setError("");
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-red-50 focus:outline-none"
+                      >
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-semibold text-gray-800">
+                              {it.nome}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              Código: {it.codigo || "Sem código"}
+                            </p>
+                          </div>
+                          <span className="text-xs text-gray-500">
+                            Estoque: {it.quantidade || 0} {it.unidade || "UN"}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="lg:grid lg:grid-cols-3 lg:gap-6">
+              <div>
+                <label className="block text-gray-700 text-sm font-bold mb-2">
+                  Quantidade *
+                </label>
+                <input
+                  type="number"
+                  name="quantidade"
+                  value={formData.quantidade}
+                  onChange={handleChange}
+                  step="0.01"
+                  min="0.01"
+                  max={itemFound ? itemFound.quantidade : undefined}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                />
+                {itemFound && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Máximo: {itemFound.quantidade || 0} {itemFound.unidade || "UN"}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-gray-700 text-sm font-bold mb-2">
+                  Setor Destino *
+                </label>
+                <input
+                  type="text"
+                  name="setorDestino"
+                  value={formData.setorDestino}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="Ex: Administração, Manutenção, etc."
                 />
               </div>
 
-              {searchTerm.trim().length > 0 && (
-                <div className="mt-2 max-h-48 overflow-y-auto border border-gray-200 rounded-lg divide-y">
-                  {/* AGORA USANDO filteredItems SEM HOOK NO JSX */}
-                  {filteredItems.map((it) => (
-                    <button
-                      type="button"
-                      key={it.id}
-                      onClick={() => {
-                        setItemFound(it);
-                        setFormData((prev) => ({
-                          ...prev,
-                          itemId: it.id,
-                          codigo: it.codigo || "",
-                        }));
-                        setError("");
-                      }}
-                      className="w-full text-left px-3 py-2 hover:bg-red-50 focus:outline-none"
-                    >
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="font-semibold text-gray-800">
-                            {it.nome}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            Código: {it.codigo || "Sem código"}
-                          </p>
-                        </div>
-                        <span className="text-xs text-gray-500">
-                          Estoque: {it.quantidade || 0} {it.unidade || "UN"}
-                        </span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">
-                Quantidade *
-              </label>
-              <input
-                type="number"
-                name="quantidade"
-                value={formData.quantidade}
-                onChange={handleChange}
-                step="0.01"
-                min="0.01"
-                max={itemFound ? itemFound.quantidade : undefined}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-              />
-              {itemFound && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Máximo disponível: {itemFound.quantidade || 0}{" "}
-                  {itemFound.unidade || "UN"}
-                </p>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">
-                Setor Destino *
-              </label>
-              <input
-                type="text"
-                name="setorDestino"
-                value={formData.setorDestino}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                placeholder="Ex: Administração, Manutenção, etc."
-              />
-            </div>
-
-            <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">
-                Retirado Por
-              </label>
-              <input
-                type="text"
-                name="retiradoPor"
-                value={formData.retiradoPor}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                placeholder="Nome da pessoa que retirou"
-              />
+              <div>
+                <label className="block text-gray-700 text-sm font-bold mb-2">
+                  Retirado Por
+                </label>
+                <input
+                  type="text"
+                  name="retiradoPor"
+                  value={formData.retiradoPor}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                  placeholder="Nome da pessoa que retirou"
+                />
+              </div>
             </div>
 
             <div>
@@ -401,10 +419,13 @@ const Exit = () => {
               <button
                 type="submit"
                 disabled={loading || !itemFound}
-                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed transition"
+                className="action-button px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed transition relative overflow-hidden"
               >
-                <Save className="w-5 h-5" />
-                <span>{loading ? "Registrando..." : "Registrar Saída"}</span>
+                <div className="action-button-ring">
+                  <i></i>
+                </div>
+                <Save className="w-5 h-5 relative z-10" />
+                <span className="relative z-10">{loading ? "Registrando..." : "Registrar Saída"}</span>
               </button>
             </div>
           </form>

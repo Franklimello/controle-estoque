@@ -1,15 +1,21 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { getItemById, updateItem } from "../services/items";
+import { getItemById, updateItem, deleteItem } from "../services/items";
 import { validateItem } from "../utils/validators";
-import { Save, X, Package } from "lucide-react";
+import { Save, X, Package, Trash2 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { useToastContext } from "../context/ToastContext";
+import Modal from "../components/Modal";
 
 const EditItem = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { isAdmin, currentUser } = useAuth();
+  const { success, error: showError } = useToastContext();
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState("");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [formData, setFormData] = useState({
     nome: "",
     codigo: "",
@@ -51,6 +57,27 @@ const EditItem = () => {
     }
   }, [id]);
 
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-2xl mx-auto">
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h1 className="text-2xl font-bold text-gray-800 mb-4">Acesso restrito</h1>
+            <p className="text-gray-600">
+              Apenas o administrador pode editar itens.
+            </p>
+            <button
+              onClick={() => navigate("/items")}
+              className="mt-4 px-4 py-2 rounded bg-blue-600 text-white"
+            >
+              Voltar para itens
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({
@@ -72,21 +99,44 @@ const EditItem = () => {
     }
 
     try {
-      await updateItem(id, {
-        nome: formData.nome,
-        categoria: formData.categoria,
-        unidade: formData.unidade,
-        local: formData.local,
-        fornecedor: formData.fornecedor,
-        validade: formData.validade || null
-        // Não atualizar quantidade aqui - use Entradas/Saídas
-      });
+      await updateItem(
+        id,
+        {
+          nome: formData.nome,
+          categoria: formData.categoria,
+          unidade: formData.unidade,
+          local: formData.local,
+          fornecedor: formData.fornecedor,
+          validade: formData.validade || null,
+          // Não atualizar quantidade aqui - use Entradas/Saídas
+        },
+        currentUser?.uid
+      );
       
-      navigate("/items");
+      success("Item atualizado com sucesso!");
+      setTimeout(() => {
+        navigate("/items");
+      }, 1000);
     } catch (error) {
-      setError("Erro ao atualizar item: " + error.message);
+      showError("Erro ao atualizar item: " + error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    try {
+      setLoading(true);
+      await deleteItem(id, currentUser?.uid);
+      success("Item excluído com sucesso!");
+      setTimeout(() => {
+        navigate("/items");
+      }, 1000);
+    } catch (error) {
+      showError("Erro ao excluir item: " + error.message);
+    } finally {
+      setLoading(false);
+      setShowDeleteModal(false);
     }
   };
 
@@ -94,7 +144,10 @@ const EditItem = () => {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="loading-ring">
+            <i></i>
+            <i></i>
+          </div>
           <p className="mt-4 text-gray-600">Carregando...</p>
         </div>
       </div>
@@ -102,25 +155,26 @@ const EditItem = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-2xl mx-auto">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-2xl font-bold text-gray-800 flex items-center">
-              <Package className="w-6 h-6 mr-2" />
-              Editar Item
+    <div className="min-h-screen bg-gray-50 p-0 md:p-6">
+      <div className="max-w-full md:max-w-2xl mx-auto px-4 md:px-0">
+        <div className="bg-white rounded-lg shadow-md p-4 md:p-6">
+          <div className="flex items-center justify-between mb-6 pt-4 md:pt-0 gap-2">
+            <h1 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center flex-1 min-w-0">
+              <Package className="w-5 h-5 md:w-6 md:h-6 mr-2 flex-shrink-0" />
+              <span className="truncate">Editar Item</span>
             </h1>
             <button
               onClick={() => navigate("/items")}
-              className="text-gray-600 hover:text-gray-800"
+              className="text-gray-600 hover:text-gray-800 flex-shrink-0"
             >
               <X className="w-6 h-6" />
             </button>
           </div>
 
           {error && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-              {error}
+            <div className="alert-ring bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 relative">
+              <i></i>
+              <span className="relative z-10">{error}</span>
             </div>
           )}
 
@@ -244,26 +298,72 @@ const EditItem = () => {
               </div>
             </div>
 
-            <div className="flex justify-end space-x-4 pt-4">
+            <div className="flex flex-col md:flex-row justify-end gap-3 md:space-x-4 pt-4">
               <button
                 type="button"
                 onClick={() => navigate("/items")}
-                className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
+                className="w-full md:w-auto px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition"
               >
                 Cancelar
               </button>
               <button
+                type="button"
+                onClick={() => setShowDeleteModal(true)}
+                disabled={loading}
+                className="action-button w-full md:w-auto px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center justify-center space-x-2 disabled:opacity-50 transition relative overflow-hidden"
+              >
+                <div className="action-button-ring">
+                  <i></i>
+                </div>
+                <Trash2 className="w-5 h-5 relative z-10" />
+                <span className="relative z-10">Excluir</span>
+              </button>
+              <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 disabled:opacity-50 transition"
+                className="action-button w-full md:w-auto px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center space-x-2 disabled:opacity-50 transition relative overflow-hidden"
               >
-                <Save className="w-5 h-5" />
-                <span>{loading ? "Salvando..." : "Salvar"}</span>
+                <div className="action-button-ring">
+                  <i></i>
+                </div>
+                <Save className="w-5 h-5 relative z-10" />
+                <span className="relative z-10">{loading ? "Salvando..." : "Salvar"}</span>
               </button>
             </div>
           </form>
         </div>
       </div>
+
+      {/* Modal de Confirmação de Exclusão */}
+      <Modal
+        isOpen={showDeleteModal}
+        onClose={() => setShowDeleteModal(false)}
+        title="Confirmar Exclusão"
+        confirmText="Excluir"
+        cancelText="Cancelar"
+        onConfirm={handleDelete}
+        confirmVariant="danger"
+        showConfirm={true}
+        size="md"
+      >
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 text-red-600">
+            <Trash2 className="w-8 h-8" />
+            <p className="text-lg font-semibold">Atenção!</p>
+          </div>
+          <p className="text-gray-700">
+            Tem certeza que deseja excluir o item{" "}
+            <strong>"{formData.nome || "sem nome"}"</strong>
+            {formData.codigo ? ` (código: ${formData.codigo})` : ""}?
+          </p>
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+            <p className="text-sm text-red-800">
+              <strong>⚠️ Esta ação não pode ser desfeita.</strong> Todos os dados
+              relacionados a este item serão permanentemente removidos.
+            </p>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

@@ -1,8 +1,15 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import { getItems, getItemsLowStock, getItemsExpiring } from "../services/items";
-import { ESTOQUE_BAIXO_LIMITE, VENCIMENTO_PROXIMO_DIAS } from "../config/constants";
+import {
+  getItems,
+  getItemsLowStock,
+  getItemsExpiring,
+} from "../services/items";
+import {
+  ESTOQUE_BAIXO_LIMITE,
+  VENCIMENTO_PROXIMO_DIAS,
+} from "../config/constants";
 
-const ItemsContext = createContext({});
+const ItemsContext = createContext(null);
 
 export const useItems = () => {
   const context = useContext(ItemsContext);
@@ -21,15 +28,14 @@ export const ItemsProvider = ({ children }) => {
   const loadItems = async () => {
     try {
       setLoading(true);
+
       const itemsData = await getItems();
       setItems(itemsData);
-      
-      const [lowStock, expiring] = await Promise.all([
-        getItemsLowStock(ESTOQUE_BAIXO_LIMITE),
-        getItemsExpiring(VENCIMENTO_PROXIMO_DIAS)
-      ]);
-      
+
+      const lowStock = await getItemsLowStock(ESTOQUE_BAIXO_LIMITE);
       setLowStockItems(lowStock);
+
+      const expiring = await getItemsExpiring(VENCIMENTO_PROXIMO_DIAS);
       setExpiringItems(expiring);
     } catch (error) {
       console.error("Erro ao carregar itens:", error);
@@ -42,22 +48,19 @@ export const ItemsProvider = ({ children }) => {
     loadItems();
   }, []);
 
-  const refreshItems = () => {
-    loadItems();
-  };
-
-  const value = {
-    items,
-    lowStockItems,
-    expiringItems,
-    loading,
-    refreshItems
-  };
+  const refreshItems = () => loadItems();
 
   return (
-    <ItemsContext.Provider value={value}>
+    <ItemsContext.Provider
+      value={{
+        items,
+        lowStockItems,
+        expiringItems,
+        loading,
+        refreshItems,
+      }}
+    >
       {children}
     </ItemsContext.Provider>
   );
 };
-
