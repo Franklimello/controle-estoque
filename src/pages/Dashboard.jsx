@@ -48,13 +48,16 @@ const Dashboard = () => {
 
   if (loading || itemsLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center space-y-4">
           <div className="loading-ring">
             <i></i>
             <i></i>
           </div>
-          <p className="mt-4 text-gray-600">Carregando...</p>
+          <div className="space-y-2">
+            <p className="text-gray-700 font-medium">Carregando dados...</p>
+            <p className="text-sm text-gray-500">Aguarde um momento</p>
+          </div>
         </div>
       </div>
     );
@@ -67,17 +70,19 @@ const Dashboard = () => {
 
         {/* Cards de Resumo */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-md p-6 relative overflow-hidden">
+          <div className="bg-white rounded-lg shadow-md p-6 relative overflow-hidden hover-lift transition-all duration-300 border border-gray-100">
             <div className="dashboard-card-ring text-blue-600">
               <i></i>
               <i></i>
             </div>
             <div className="flex items-center justify-between relative z-10">
               <div>
-                <p className="text-gray-600 text-sm">Total de Itens</p>
+                <p className="text-gray-600 text-sm font-medium">Total de Itens</p>
                 <p className="text-3xl font-bold text-gray-800 mt-2">{items.length}</p>
               </div>
-              <Package className="w-12 h-12 text-blue-600" />
+              <div className="p-3 bg-blue-100 rounded-xl">
+                <Package className="w-10 h-10 text-blue-600" />
+              </div>
             </div>
           </div>
 

@@ -44,6 +44,151 @@ const Login = () => {
 
   return (
     <div className="login-container">
+      {/* Animação de cubos 3D */}
+      <div className="cube-container">
+        <div className="cube">
+          <div data-x="0" data-y="0">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="1" data-y="0">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="2" data-y="0">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="0" data-y="1">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="1" data-y="1">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="2" data-y="1">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="0" data-y="2">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="1" data-y="2">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="2" data-y="2">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+        </div>
+        <div className="cube">
+          <div data-x="0" data-y="0">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="1" data-y="0">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="2" data-y="0">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="0" data-y="1">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="1" data-y="1">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="2" data-y="1">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="0" data-y="2">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="1" data-y="2">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="2" data-y="2">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+        </div>
+        <div className="cube">
+          <div data-x="0" data-y="0">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="1" data-y="0">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="2" data-y="0">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="0" data-y="1">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="1" data-y="1">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="2" data-y="1">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="0" data-y="2">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="1" data-y="2">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+          <div data-x="2" data-y="2">
+            <span style={{ zIndex: 1 }}></span>
+            <span style={{ zIndex: 2 }}></span>
+            <span style={{ zIndex: 3 }}></span>
+          </div>
+        </div>
+      </div>
+      
       <div className="login-ring">
         <i></i>
         <i></i>
@@ -83,12 +228,14 @@ const Login = () => {
             />
           </div>
 
-          <div className="login-input-box">
-            <input
-              type="submit"
-              value={loading ? "Entrando..." : "Entrar"}
-              disabled={loading}
-            />
+          <div className="login-input-box particle-deconstruct-container">
+            <div className={`particle-deconstruct-element ${loading ? 'disabled' : ''}`}>
+              <input
+                type="submit"
+                value={loading ? "Entrando..." : "Entrar"}
+                disabled={loading}
+              />
+            </div>
           </div>
         </form>
       </div>

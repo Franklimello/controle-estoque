@@ -2,6 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  html, body, #root {
+    font-family: 'Inter', 'Poppins', 'Nunito', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  
+  /* Melhorias de transição global */
+  * {
+    @apply transition-colors duration-200;
+  }
+  
+  /* Scrollbar personalizada */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-gray-100;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 rounded-full;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-400;
+  }
+}
+
+html, body, #root {
+  /* Força a largura máxima a ser 100% da tela */
+  max-width: 100%; 
+  /* Esconde qualquer conteúdo que tente rolar horizontalmente */
+  overflow-x: hidden; 
+}
 /* ============================================
    ANIMAÇÕES REUTILIZÁVEIS - ESTILO ANÉIS
    ============================================ */
@@ -228,6 +265,186 @@
 
 .modal-ring {
   animation: modal-fade-in 0.2s ease-out;
+}
+
+/* Skeleton Loading */
+@keyframes skeleton-loading {
+  0% {
+    background-position: -200px 0;
+  }
+  100% {
+    background-position: calc(200px + 100%) 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 0px,
+    #f8f8f8 40px,
+    #f0f0f0 80px
+  );
+  background-size: 200px 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+/* Melhorias de hover e interação */
+.hover-lift {
+  @apply transition-all duration-300;
+}
+
+.hover-lift:hover {
+  @apply transform -translate-y-1 shadow-lg;
+}
+
+/* Focus states melhorados */
+.focus-ring {
+  @apply focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500;
+}
+
+/* Animações de entrada suaves */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.5s ease-out;
+}
+
+/* Badge pulse para alertas */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+}
+
+.pulse-alert {
+  animation: pulse-glow 2s infinite;
+}
+
+/* Animação de expansão para botões de navegação */
+.expanding-nav-item {
+  position: relative;
+  list-style: none;
+  width: 60px;
+  height: 60px;
+  background: white;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  border-radius: 60px;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: 0.5s;
+  overflow: hidden;
+  margin: 0;
+  padding: 0;
+}
+
+.expanding-nav-item a {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-decoration: none;
+  position: relative;
+  z-index: 1;
+}
+
+.expanding-nav-item::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 60px;
+  background: linear-gradient(45deg, var(--i, #3b82f6), var(--j, #8b5cf6));
+  opacity: 0;
+  transition: 0.5s;
+}
+
+.expanding-nav-item::after {
+  content: "";
+  position: absolute;
+  top: 10px;
+  width: 100%;
+  height: 100%;
+  border-radius: 60px;
+  background: linear-gradient(45deg, var(--i, #3b82f6), var(--j, #8b5cf6));
+  transition: 0.5s;
+  filter: blur(15px);
+  z-index: -1;
+  opacity: 0;
+}
+
+.expanding-nav-item:hover {
+  width: 180px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0);
+}
+
+.expanding-nav-item:hover::before {
+  opacity: 1;
+}
+
+.expanding-nav-item:hover::after {
+  opacity: 0.5;
+}
+
+.expanding-nav-item .nav-icon {
+  color: #777;
+  width: 1.75em;
+  height: 1.75em;
+  transition: 0.5s;
+  transition-delay: 0.25s;
+  z-index: 2;
+  flex-shrink: 0;
+}
+
+.expanding-nav-item:hover .nav-icon {
+  transform: scale(0);
+  color: #fff;
+  transition-delay: 0s;
+}
+
+.expanding-nav-item .nav-title {
+  position: absolute;
+  color: #fff;
+  font-size: 1.1em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  transform: scale(0);
+  transition: 0.5s;
+  transition-delay: 0s;
+  white-space: nowrap;
+  z-index: 2;
+  font-weight: 600;
+}
+
+.expanding-nav-item:hover .nav-title {
+  transform: scale(1);
+  transition-delay: 0.25s;
+}
+
+.expanding-nav-item.active {
+  background: linear-gradient(45deg, var(--i, #3b82f6), var(--j, #8b5cf6));
+  box-shadow: 0 10px 25px rgba(59, 130, 246, 0.3);
+}
+
+.expanding-nav-item.active .nav-icon {
+  color: #fff;
+}
+
+.expanding-nav-item.active::before {
+  opacity: 1;
 }
 
 /* Responsive */

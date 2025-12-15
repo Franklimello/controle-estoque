@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useItems } from "../context/ItemsContext";
 import { useAuth } from "../context/AuthContext";
 import ItemCard from "../components/ItemCard";
-import { Search, Plus, AlertTriangle, Clock, Printer, Filter, X, Package, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
+import { Search, Plus, AlertTriangle, Clock, Printer, Filter, X, Package, ArrowDownCircle, ArrowUpCircle, FileSpreadsheet } from "lucide-react";
 import { checkExpiringDate, formatExpiryDate } from "../utils/dateUtils";
+import { exportStockToExcel } from "../utils/exportExcel";
 
 // Componente FilterButton movido para fora para evitar re-renderizações
 const FilterButton = ({ type, icon: Icon, label, activeColor, hoverColor, filterType, setFilterType }) => {
@@ -38,7 +39,7 @@ const Items = () => {
   }, [refreshItems]);
 
   const filterLowStock = (items) => {
-    return items.filter((item) => Number(item.quantidade) < 10);
+    return items.filter((item) => Number(item.quantidade) < 11);
   };
 
   const filterNearExpiry = (itemsList) => {
@@ -51,7 +52,7 @@ const Items = () => {
 
   const filterLowStockAndNearExpiry = (itemsList) => {
     return itemsList.filter((item) => {
-      const lowStock = Number(item.quantidade) < 10;
+      const lowStock = Number(item.quantidade) < 11;
       const expiryInfo = checkExpiringDate(item.validade);
       const nearExpiry =
         expiryInfo.daysUntilExpiry !== null &&
@@ -103,6 +104,15 @@ const Items = () => {
     lowStock: "Somente estoque baixo",
     nearExpiry: "Somente perto do vencimento",
     lowStockAndNearExpiry: "Estoque baixo e perto do vencimento",
+  };
+
+  const handleExportExcel = () => {
+    try {
+      exportStockToExcel(items);
+    } catch (error) {
+      console.error("Erro ao exportar para Excel:", error);
+      alert("Erro ao exportar planilha. Tente novamente.");
+    }
   };
 
   const handlePrint = () => {
@@ -207,13 +217,13 @@ const Items = () => {
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 mb-6">
           {/* Search Bar */}
           <div className="relative mb-4">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 transition-colors duration-200" />
             <input
               type="text"
               placeholder="Buscar por nome, código ou categoria..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-12 pr-4 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 text-gray-900 placeholder-gray-400"
+              className="w-full pl-12 pr-12 py-3.5 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-gray-900 placeholder-gray-400 bg-white hover:border-gray-300 focus-ring"
             />
             {searchTerm && (
               <button
@@ -268,10 +278,19 @@ const Items = () => {
             >
               Todos
             </button>
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-3">
+              <button
+                onClick={handleExportExcel}
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-green-200 bg-white text-green-700 hover:bg-green-50 hover:border-green-300 hover:shadow-md transition-all duration-200 font-medium hover:scale-105 hover-lift focus-ring"
+                title="Exportar planilha Excel"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span className="hidden sm:inline">Exportar Planilha</span>
+              </button>
               <button
                 onClick={handlePrint}
-                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300 hover:shadow-md transition-all duration-200 font-medium hover:scale-105"
+                className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-300 hover:shadow-md transition-all duration-200 font-medium hover:scale-105 hover-lift focus-ring"
+                title="Imprimir relatório"
               >
                 <Printer className="w-4 h-4" />
                 <span className="hidden sm:inline">Imprimir</span>
@@ -332,6 +351,13 @@ const Items = () => {
                   Todos os Itens
                 </button>
                 <button
+                  onClick={handleExportExcel}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-green-200 bg-white text-green-700 hover:bg-green-50 transition-all duration-200 font-medium"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  Exportar Planilha
+                </button>
+                <button
                   onClick={handlePrint}
                   className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-all duration-200 font-medium"
                 >
@@ -345,19 +371,28 @@ const Items = () => {
 
         {/* 📱 MOBILE (CARDS) */}
         {filteredItems.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-12 text-center">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-12 text-center animate-fade-in-up">
             <div className="max-w-md mx-auto">
-              <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-4 shadow-inner">
                 <Package className="w-10 h-10 text-gray-400" />
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
                 {searchTerm ? "Nenhum item encontrado" : "Nenhum item cadastrado"}
               </h3>
-              <p className="text-gray-500">
+              <p className="text-gray-500 mb-4">
                 {searchTerm
                   ? "Tente ajustar sua busca ou filtros"
                   : "Comece adicionando itens ao estoque"}
               </p>
+              {!searchTerm && isAdmin && (
+                <button
+                  onClick={() => navigate("/new-item")}
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition-all duration-200 shadow-md hover:shadow-lg hover-lift"
+                >
+                  <Plus className="w-5 h-5" />
+                  Adicionar Primeiro Item
+                </button>
+              )}
             </div>
           </div>
         ) : (
@@ -374,7 +409,7 @@ const Items = () => {
                 let badge = null;
                 let badgeColor = "";
 
-                const lowStock = Number(item.quantidade) < 10;
+                const lowStock = Number(item.quantidade) < 11;
                 const nearExpiry =
                   diffDays !== null && diffDays <= 7 && diffDays >= 0;
 
@@ -426,7 +461,7 @@ const Items = () => {
                           ? expiryInfo.daysUntilExpiry
                           : null;
 
-                      const lowStock = Number(item.quantidade) < 10;
+                      const lowStock = Number(item.quantidade) < 11;
                       const nearExpiry =
                         diffDays !== null && diffDays <= 7 && diffDays >= 0;
                       const isExpired = expiryInfo.isExpired;
@@ -476,8 +511,10 @@ const Items = () => {
                       return (
                         <tr
                           key={item.id}
-                          className={`hover:bg-gray-50 transition-colors ${
-                            isAdmin ? "cursor-pointer" : "cursor-default"
+                          className={`transition-all duration-200 ${
+                            isAdmin 
+                              ? "cursor-pointer hover:bg-blue-50 hover:shadow-sm" 
+                              : "cursor-default hover:bg-gray-50"
                           }`}
                           onClick={() => isAdmin && navigate(`/edit-item/${item.id}`)}
                         >
@@ -527,8 +564,16 @@ const Items = () => {
                   </tbody>
                 </table>
               </div>
-              <div className="px-6 py-4 border-t bg-gray-50 text-sm font-medium text-gray-700">
-                Total de itens: {filteredItems.length}
+              <div className="px-6 py-4 border-t bg-gradient-to-r from-gray-50 to-blue-50 text-sm font-semibold text-gray-700 flex items-center justify-between">
+                <span>Total de itens: <span className="text-blue-600">{filteredItems.length}</span></span>
+                {filterType !== "all" && (
+                  <button
+                    onClick={() => setFilterType("all")}
+                    className="text-xs text-blue-600 hover:text-blue-700 font-medium underline"
+                  >
+                    Limpar filtros
+                  </button>
+                )}
               </div>
             </div>
           </>

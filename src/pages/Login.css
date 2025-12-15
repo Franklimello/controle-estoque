@@ -3,10 +3,134 @@
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  background: #111;
+  background: #25335b;
   width: 100%;
   overflow: hidden;
   position: relative;
+}
+
+/* Animação de cubos 3D */
+@keyframes cube-animate {
+  0% {
+    filter: hue-rotate(0deg);
+  }
+  100% {
+    filter: hue-rotate(360deg);
+  }
+}
+
+.cube-container {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) skewY(-20deg);
+  animation: cube-animate 5s linear infinite;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.cube {
+  position: relative;
+  z-index: 2;
+}
+
+.cube:nth-child(2) {
+  z-index: 1;
+  transform: translate(-60px, -60px);
+}
+
+.cube:nth-child(3) {
+  z-index: 3;
+  transform: translate(60px, 60px);
+}
+
+.cube div {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.cube div[data-x="0"][data-y="0"] {
+  transform: translate(calc(-70px * 0), calc(-60px * 0));
+}
+
+.cube div[data-x="1"][data-y="0"] {
+  transform: translate(calc(-70px * 1), calc(-60px * 0));
+}
+
+.cube div[data-x="2"][data-y="0"] {
+  transform: translate(calc(-70px * 2), calc(-60px * 0));
+}
+
+.cube div[data-x="0"][data-y="1"] {
+  transform: translate(calc(-70px * 0), calc(-60px * 1));
+}
+
+.cube div[data-x="1"][data-y="1"] {
+  transform: translate(calc(-70px * 1), calc(-60px * 1));
+}
+
+.cube div[data-x="2"][data-y="1"] {
+  transform: translate(calc(-70px * 2), calc(-60px * 1));
+}
+
+.cube div[data-x="0"][data-y="2"] {
+  transform: translate(calc(-70px * 0), calc(-60px * 2));
+}
+
+.cube div[data-x="1"][data-y="2"] {
+  transform: translate(calc(-70px * 1), calc(-60px * 2));
+}
+
+.cube div[data-x="2"][data-y="2"] {
+  transform: translate(calc(-70px * 2), calc(-60px * 2));
+}
+
+.cube div span {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 50px;
+  background: #dcdcdc;
+  transition: 1.5s;
+}
+
+.cube div span:hover {
+  transition: 0s;
+  background: #ef4149;
+  filter: drop-shadow(0 0 30px #ef4149);
+}
+
+.cube div span:hover::before,
+.cube div span:hover::after {
+  transition: 0s;
+  background: #ef4149;
+}
+
+.cube div span::before {
+  content: "";
+  position: absolute;
+  left: -40px;
+  width: 40px;
+  height: 100%;
+  background: #fff;
+  transform-origin: right;
+  transform: skewY(45deg);
+  transition: 1.5s;
+}
+
+.cube div span::after {
+  content: "";
+  position: absolute;
+  top: -40px;
+  left: 0px;
+  width: 100%;
+  height: 40px;
+  background: #f2f2f2;
+  transform-origin: bottom;
+  transform: skewX(45deg);
+  transition: 1.5s;
 }
 
 .login-ring {
@@ -16,6 +140,7 @@
   display: flex;
   justify-content: center;
   align-items: center;
+  z-index: 50;
 }
 
 .login-ring i {
@@ -72,12 +197,12 @@
   align-items: center;
   flex-direction: column;
   gap: 20px;
-  z-index: 10;
+  z-index: 100;
 }
 
 .login-form-wrapper h2 {
   font-size: 2em;
-  color: #fff;
+  color: #000;
   font-weight: bold;
 }
 
@@ -90,42 +215,30 @@
   position: relative;
   width: 100%;
   padding: 12px 20px;
-  background: transparent;
-  border: 2px solid rgba(255, 255, 255, 0.5);
+  background: rgba(15, 23, 42, 0.6); /* azul bem escuro translúcido */
+  border: 1.5px solid #1f2937;       /* slate-800 */
   border-radius: 40px;
   font-size: 1.1em;
-  color: #fff;
+  color: #e2e8f0;                    /* slate-200 */
   box-shadow: none;
   outline: none;
   transition: all 0.3s;
 }
 
+/* Exceção para o container do botão submit - não aplicar estilos padrão */
+.particle-deconstruct-container.login-input-box {
+  padding: 0;
+}
+
 .login-input-box input:focus {
-  border-color: #fff;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+  border-color: #3b82f6; /* azul para foco */
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
 }
 
-.login-input-box input[type="submit"] {
-  width: 100%;
-  background: linear-gradient(45deg, #ef4444, #3b82f6);
-  border: none;
-  cursor: pointer;
-  font-weight: bold;
-  transition: all 0.3s;
-}
-
-.login-input-box input[type="submit"]:hover:not(:disabled) {
-  transform: scale(1.05);
-  box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
-}
-
-.login-input-box input[type="submit"]:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+/* Estilos antigos do botão removidos - agora usando particle-deconstruct */
 
 .login-input-box input::placeholder {
-  color: rgba(255, 255, 255, 0.6);
+  color: rgba(226, 232, 240, 0.7); /* slate-200 com transparência */
 }
 
 .login-error {
@@ -169,5 +282,104 @@
     font-size: 1em;
     padding: 10px 18px;
   }
+}
+
+/* Animação Particle Deconstruct para o botão Entrar */
+.particle-deconstruct-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  position: relative;
+}
+
+.particle-deconstruct-element {
+  width: 100%;
+  height: 50px;
+  background: linear-gradient(45deg, #ef4444, #3b82f6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  overflow: hidden;
+  border-radius: 40px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+}
+
+.particle-deconstruct-element input[type="submit"] {
+  color: #fff !important;
+  font-size: 1.1em !important;
+  font-weight: bold !important;
+  position: relative;
+  z-index: 2;
+  transition: all 0.5s ease;
+  background: transparent !important;
+  border: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.particle-deconstruct-element::before,
+.particle-deconstruct-element::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: repeating-radial-gradient(
+    circle at center, 
+    rgba(0, 255, 255, 0.8) 1px, 
+    transparent 2px, 
+    transparent 50px
+  );
+  opacity: 0;
+  transition: all 0.5s ease;
+  border-radius: 40px;
+  pointer-events: none;
+}
+
+.particle-deconstruct-element:hover {
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.5);
+}
+
+.particle-deconstruct-element:hover input[type="submit"] {
+  transform: scale(1.1);
+  opacity: 0.9;
+}
+
+.particle-deconstruct-element:hover::before {
+  transform: scale(2) rotate(45deg);
+  opacity: 0.4;
+}
+
+.particle-deconstruct-element:hover::after {
+  transform: scale(2) rotate(-45deg);
+  opacity: 0.4;
+}
+
+.particle-deconstruct-element:active {
+  transform: scale(0.98);
+}
+
+.particle-deconstruct-element.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.particle-deconstruct-element.disabled:hover input[type="submit"] {
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+.particle-deconstruct-element.disabled:hover::before,
+.particle-deconstruct-element.disabled:hover::after {
+  opacity: 0 !important;
 }
 

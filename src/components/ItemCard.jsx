@@ -11,10 +11,18 @@ const ItemCard = ({ item, onClick, clickable = true, badge, badgeColor }) => {
   return (
     <div
       onClick={clickable ? onClick : undefined}
-      className={`item-card bg-white rounded-lg shadow-md p-6 relative overflow-hidden ${
-        clickable ? "cursor-pointer transition transform hover:scale-105 hover:shadow-lg" : "cursor-default opacity-90"
+      className={`item-card bg-white rounded-lg shadow-md p-6 relative overflow-hidden transition-all duration-300 ${
+        clickable 
+          ? "cursor-pointer hover:scale-[1.02] hover:shadow-xl hover-lift border-l-4" 
+          : "cursor-default opacity-90 border-l-4"
       } ${
-        hasWarning ? "border-l-4 border-red-500" : "border-l-4 border-green-500"
+        hasWarning 
+          ? clickable 
+            ? "border-red-500 hover:border-red-600" 
+            : "border-red-500"
+          : clickable
+            ? "border-green-500 hover:border-green-600"
+            : "border-green-500"
       }`}
     >
       {clickable && (

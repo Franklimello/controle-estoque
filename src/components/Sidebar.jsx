@@ -9,6 +9,7 @@ import {
   LogOut,
   User,
   Lock,
+  FileText,
 } from "lucide-react";
 
 const Sidebar = () => {
@@ -44,6 +45,12 @@ const Sidebar = () => {
       label: "Hist. Saídas",
       adminOnly: false,
     },
+    {
+      to: "/reports",
+      icon: FileText,
+      label: "Relatórios",
+      adminOnly: false,
+    },
   ];
 
   if (!currentUser) return null;
@@ -58,26 +65,42 @@ const Sidebar = () => {
 
         {/* Navigation Links */}
         <nav className="flex-1 overflow-y-auto p-4 space-y-2">
-          {navLinks
-            .filter((link) => (link.adminOnly ? isAdmin : true))
-            .map((link) => {
-              const Icon = link.icon;
-              const active = isActive(link.to);
-              return (
-                <Link
-                  key={link.to}
-                  to={link.to}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 font-medium ${
-                    active
-                      ? "bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-500/25"
-                      : "text-gray-700 hover:bg-gray-100"
-                  }`}
-                >
-                  <Icon className="w-5 h-5 flex-shrink-0" />
-                  <span>{link.label}</span>
-                </Link>
-              );
-            })}
+          <ul className="flex flex-col gap-3">
+            {navLinks
+              .filter((link) => (link.adminOnly ? isAdmin : true))
+              .map((link) => {
+                const Icon = link.icon;
+                const active = isActive(link.to);
+                const colors = {
+                  "/dashboard": { i: "#3b82f6", j: "#8b5cf6" },
+                  "/items": { i: "#10b981", j: "#059669" },
+                  "/entry": { i: "#f59e0b", j: "#d97706" },
+                  "/exit": { i: "#ef4444", j: "#dc2626" },
+                  "/entries-history": { i: "#06b6d4", j: "#0891b2" },
+                  "/exits-history": { i: "#ec4899", j: "#db2777" },
+                };
+                const colorScheme = colors[link.to] || { i: "#3b82f6", j: "#8b5cf6" };
+                
+                return (
+                  <li
+                    key={link.to}
+                    className={`expanding-nav-item ${active ? "active" : ""}`}
+                    style={{
+                      "--i": colorScheme.i,
+                      "--j": colorScheme.j,
+                    }}
+                  >
+                    <Link
+                      to={link.to}
+                      className="w-full h-full flex items-center justify-center relative"
+                    >
+                      <Icon className="nav-icon w-6 h-6" />
+                      <span className="nav-title">{link.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+          </ul>
         </nav>
 
         {/* User Info and Logout */}

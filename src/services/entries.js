@@ -9,8 +9,8 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { addItem, getItemByCodigo, incrementStock } from "./items";
-import { addOrIncrementBatch } from "./batches";
+import { addItem, getItemByCodigo, incrementStock, updateItem } from "./items";
+import { addOrIncrementBatch, getEarliestBatchValidity } from "./batches";
 
 const ENTRIES_COLLECTION = "entries";
 
@@ -89,9 +89,12 @@ export const addEntry = async (entryData, userId) => {
     // Adiciona ou incrementa o lote com a validade específica desta entrada
     await addOrIncrementBatch(item.id, entryData.validade, quantidadeInt);
 
-    // ❌ REMOVIDO: NÃO atualizar validade no item principal
-    // Cada lote mantém sua própria validade
-    // O sistema de lotes (batches) já gerencia isso corretamente
+    // Atualizar validade do item principal com a validade mais próxima dos lotes
+    // Isso garante que a validade seja exibida corretamente na lista de itens
+    const earliestValidity = await getEarliestBatchValidity(item.id);
+    if (earliestValidity) {
+      await updateItem(item.id, { validade: earliestValidity }, userId);
+    }
 
     // Registrar entrada no histórico
     const entryRef = await addDoc(collection(db, ENTRIES_COLLECTION), {
