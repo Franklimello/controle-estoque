@@ -309,6 +309,27 @@ export const decrementBatch = async (batchId, quantidade) => {
   });
 };
 
+/**
+ * Busca todos os lotes do sistema
+ * Retorna array de { id, ...data }
+ */
+export const getAllBatches = async () => {
+  try {
+    const q = query(
+      collection(db, BATCHES_COLLECTION),
+      orderBy("validadeDate", "asc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+    }));
+  } catch (error) {
+    console.error("Erro ao buscar todos os lotes:", error);
+    throw error;
+  }
+};
+
 export default {
   addOrIncrementBatch,
   consumeFromBatches,
@@ -316,5 +337,6 @@ export default {
   getBatchesByItem,
   getExpiringBatches,
   decrementBatch,
+  getAllBatches,
 };
 

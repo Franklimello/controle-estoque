@@ -21,6 +21,8 @@ import Exit from "./pages/Exit";
 import EntriesHistory from "./pages/EntriesHistory";
 import ExitsHistory from "./pages/ExitsHistory";
 import Reports from "./pages/Reports";
+import Orders from "./pages/Orders";
+import OrdersManagement from "./pages/OrdersManagement";
 
 // Componente para proteger rotas
 const PrivateRoute = ({ children }) => {
@@ -124,6 +126,22 @@ const AppContent = () => {
               element={
                 <PrivateRoute>
                   <Reports />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/orders"
+              element={
+                <PrivateRoute>
+                  <Orders />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/orders-management"
+              element={
+                <PrivateRoute>
+                  <OrdersManagement />
                 </PrivateRoute>
               }
             />

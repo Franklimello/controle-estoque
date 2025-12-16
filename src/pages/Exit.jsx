@@ -6,7 +6,7 @@ import { useToastContext } from "../context/ToastContext";
 import { addExit } from "../services/exits";
 import { getItemByCodigo } from "../services/items";
 import { validateExit } from "../utils/validators";
-import { ArrowUpCircle, Save, X, AlertTriangle, Search } from "lucide-react";
+import { ArrowUpCircle, Save, X, AlertTriangle, Search, Plus, Trash2, Edit2, Check, XCircle } from "lucide-react";
 import { ESTOQUE_BAIXO_LIMITE } from "../config/constants";
 
 const Exit = () => {
@@ -18,6 +18,8 @@ const Exit = () => {
   const [error, setError] = useState("");
   const [itemFound, setItemFound] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [exitItems, setExitItems] = useState([]); // Lista de itens para saída
+  const [editingIndex, setEditingIndex] = useState(null); // Índice do item sendo editado
   const [formData, setFormData] = useState({
     codigo: "",
     itemId: "",
@@ -51,10 +53,10 @@ const Exit = () => {
     }));
   };
 
-  const handleSubmit = async (e) => {
+  // Adicionar item à lista
+  const handleAddToList = (e) => {
     e.preventDefault();
     setError("");
-    setLoading(true);
 
     const validation = validateExit({
       codigo: formData.codigo,
@@ -65,7 +67,6 @@ const Exit = () => {
 
     if (!validation.isValid) {
       setError(validation.errors.join(", "));
-      setLoading(false);
       return;
     }
 
@@ -74,7 +75,6 @@ const Exit = () => {
       (!formData.itemId || formData.itemId.trim().length === 0)
     ) {
       setError("Selecione um item pelo código ou pela busca.");
-      setLoading(false);
       return;
     }
 
@@ -86,27 +86,169 @@ const Exit = () => {
       setError(
         `Estoque insuficiente! Disponível: ${estoqueAtual}, Solicitado: ${quantidadeSolicitada}`
       );
-      setLoading(false);
       return;
     }
 
+    // Verificar se o item já está na lista (para evitar duplicatas)
+    const itemId = formData.itemId || (itemFound ? itemFound.id : "");
+    const existingIndex = exitItems.findIndex(item => item.itemId === itemId);
+    
+    if (existingIndex >= 0 && editingIndex === null) {
+      setError("Este item já está na lista. Edite a quantidade existente ou remova e adicione novamente.");
+      return;
+    }
+
+    const newExitItem = {
+      id: editingIndex !== null ? exitItems[editingIndex].id : Date.now().toString(),
+      itemId: itemId,
+      codigo: formData.codigo || (itemFound ? itemFound.codigo : ""),
+      item: { ...itemFound },
+      quantidade: quantidadeSolicitada,
+      setorDestino: formData.setorDestino,
+      retiradoPor: formData.retiradoPor,
+      observacao: formData.observacao,
+    };
+
+    if (editingIndex !== null) {
+      // Editar item existente
+      const updatedItems = [...exitItems];
+      updatedItems[editingIndex] = newExitItem;
+      setExitItems(updatedItems);
+      setEditingIndex(null);
+    } else {
+      // Adicionar novo item
+      setExitItems([...exitItems, newExitItem]);
+    }
+
+    // Limpar formulário
+    setFormData({
+      codigo: "",
+      itemId: "",
+      quantidade: "",
+      setorDestino: "",
+      retiradoPor: "",
+      observacao: "",
+    });
+    setItemFound(null);
+    setSearchTerm("");
+    success(editingIndex !== null ? "Item atualizado na lista!" : "Item adicionado à lista!");
+  };
+
+  // Remover item da lista
+  const handleRemoveFromList = (index) => {
+    const updatedItems = exitItems.filter((_, i) => i !== index);
+    setExitItems(updatedItems);
+    if (editingIndex === index) {
+      setEditingIndex(null);
+    }
+    success("Item removido da lista!");
+  };
+
+  // Editar item da lista
+  const handleEditItem = (index) => {
+    const item = exitItems[index];
+    setFormData({
+      codigo: item.codigo || "",
+      itemId: item.itemId,
+      quantidade: item.quantidade.toString(),
+      setorDestino: item.setorDestino,
+      retiradoPor: item.retiradoPor,
+      observacao: item.observacao,
+    });
+    setItemFound(item.item);
+    setEditingIndex(index);
+    setError("");
+  };
+
+  // Confirmar todas as saídas
+  const handleConfirmAllExits = async () => {
+    if (exitItems.length === 0) {
+      setError("Adicione pelo menos um item à lista antes de confirmar.");
+      return;
+    }
+
+    setError("");
+    setLoading(true);
+
     try {
-      await addExit(
-        {
-          codigo: formData.codigo,
-          itemId: formData.itemId || (itemFound ? itemFound.id : ""),
-          quantidade: quantidadeSolicitada,
-          setorDestino: formData.setorDestino,
-          retiradoPor: formData.retiradoPor,
-          observacao: formData.observacao,
-        },
-        currentUser.uid
-      );
+      // Agrupar itens por itemId para verificar se a soma das quantidades não excede o estoque
+      const itemsGrouped = {};
+      exitItems.forEach(exitItem => {
+        if (!itemsGrouped[exitItem.itemId]) {
+          itemsGrouped[exitItem.itemId] = [];
+        }
+        itemsGrouped[exitItem.itemId].push(exitItem);
+      });
 
-      success("Saída registrada com sucesso!");
+      // Verificar estoque para cada grupo
+      for (const itemId in itemsGrouped) {
+        const group = itemsGrouped[itemId];
+        const currentItem = items.find(item => item.id === itemId);
+        
+        if (!currentItem) {
+          throw new Error(`Item não encontrado: ${group[0].item.nome}`);
+        }
 
-      // Limpar formulário
-      setTimeout(() => {
+        const totalQuantidade = group.reduce((sum, item) => sum + item.quantidade, 0);
+        const estoqueAtual = currentItem.quantidade || 0;
+
+        if (totalQuantidade > estoqueAtual) {
+          throw new Error(
+            `Estoque insuficiente para ${group[0].item.nome}. Disponível: ${estoqueAtual}, Total solicitado: ${totalQuantidade}`
+          );
+        }
+      }
+
+      let successCount = 0;
+      let errorCount = 0;
+      const errors = [];
+
+      // Processar cada item sequencialmente para evitar problemas de concorrência
+      for (let i = 0; i < exitItems.length; i++) {
+        const exitItem = exitItems[i];
+        try {
+          // Verificar estoque novamente antes de processar (pode ter mudado durante o processamento)
+          const currentItem = items.find(item => item.id === exitItem.itemId);
+          if (!currentItem) {
+            throw new Error(`Item não encontrado: ${exitItem.item.nome}`);
+          }
+
+          const estoqueAtual = currentItem.quantidade || 0;
+          if (exitItem.quantidade > estoqueAtual) {
+            throw new Error(
+              `Estoque insuficiente para ${exitItem.item.nome}. Disponível: ${estoqueAtual}, Solicitado: ${exitItem.quantidade}`
+            );
+          }
+
+          await addExit(
+            {
+              codigo: exitItem.codigo,
+              itemId: exitItem.itemId,
+              quantidade: exitItem.quantidade,
+              setorDestino: exitItem.setorDestino,
+              retiradoPor: exitItem.retiradoPor,
+              observacao: exitItem.observacao,
+            },
+            currentUser.uid
+          );
+          successCount++;
+        } catch (error) {
+          errorCount++;
+          errors.push(`${exitItem.item.nome}: ${error.message}`);
+        }
+      }
+
+      if (successCount > 0) {
+        success(`${successCount} saída(s) registrada(s) com sucesso!`);
+      }
+
+      if (errorCount > 0) {
+        showError(`${errorCount} erro(s) ao registrar saída(s):\n${errors.join("\n")}`);
+      }
+
+      // Limpar lista e formulário apenas se todas as saídas foram bem-sucedidas
+      if (errorCount === 0) {
+        setExitItems([]);
         setFormData({
           codigo: "",
           itemId: "",
@@ -116,9 +258,11 @@ const Exit = () => {
           observacao: "",
         });
         setItemFound(null);
-      }, 1000);
+        setSearchTerm("");
+        setEditingIndex(null);
+      }
     } catch (error) {
-      showError("Erro ao registrar saída: " + error.message);
+      showError("Erro ao registrar saídas: " + error.message);
     } finally {
       setLoading(false);
     }
@@ -271,7 +415,110 @@ const Exit = () => {
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} noValidate className="space-y-3 lg:space-y-4">
+          {/* Lista de Itens Adicionados */}
+          {exitItems.length > 0 && (
+            <div className="mb-6 bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl border border-slate-200 p-4 lg:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold text-gray-800 flex items-center">
+                  <ArrowUpCircle className="w-5 h-5 mr-2 text-red-600" />
+                  Itens para Saída ({exitItems.length})
+                </h2>
+                <button
+                  onClick={handleConfirmAllExits}
+                  disabled={loading}
+                  className="action-button px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed transition relative overflow-hidden"
+                >
+                  <div className="action-button-ring">
+                    <i></i>
+                  </div>
+                  <Check className="w-5 h-5 relative z-10" />
+                  <span className="relative z-10">{loading ? "Processando..." : "Confirmar Todas as Saídas"}</span>
+                </button>
+              </div>
+
+              <div className="space-y-3 max-h-96 overflow-y-auto">
+                {exitItems.map((exitItem, index) => {
+                  const isLowStockItem = (exitItem.item.quantidade || 0) <= ESTOQUE_BAIXO_LIMITE;
+                  const estoqueAposSaida = (exitItem.item.quantidade || 0) - exitItem.quantidade;
+                  const alertaEstoqueBaixo = estoqueAposSaida <= ESTOQUE_BAIXO_LIMITE;
+
+                  return (
+                    <div
+                      key={exitItem.id}
+                      className={`bg-white rounded-lg border-2 p-4 transition-all ${
+                        editingIndex === index
+                          ? "border-blue-500 shadow-lg"
+                          : "border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="font-bold text-gray-800">{exitItem.item.nome}</h3>
+                            {isLowStockItem && (
+                              <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
+                            <div>
+                              <span className="text-gray-600">Quantidade: </span>
+                              <span className="font-semibold text-gray-800">
+                                {exitItem.quantidade} {exitItem.item.unidade || "UN"}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Setor: </span>
+                              <span className="font-semibold text-gray-800">{exitItem.setorDestino}</span>
+                            </div>
+                            {exitItem.retiradoPor && (
+                              <div>
+                                <span className="text-gray-600">Retirado por: </span>
+                                <span className="font-semibold text-gray-800">{exitItem.retiradoPor}</span>
+                              </div>
+                            )}
+                            <div>
+                              <span className="text-gray-600">Estoque atual: </span>
+                              <span className={`font-semibold ${isLowStockItem ? "text-red-600" : "text-gray-800"}`}>
+                                {exitItem.item.quantidade || 0} {exitItem.item.unidade || "UN"}
+                              </span>
+                            </div>
+                          </div>
+                          {alertaEstoqueBaixo && (
+                            <div className="mt-2 text-xs text-yellow-700 bg-yellow-50 px-2 py-1 rounded">
+                              ⚠️ Estoque ficará abaixo do mínimo após esta saída
+                            </div>
+                          )}
+                          {exitItem.observacao && (
+                            <div className="mt-2 text-xs text-gray-600">
+                              <span className="font-semibold">Obs:</span> {exitItem.observacao}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex gap-2 ml-4">
+                          <button
+                            onClick={() => handleEditItem(index)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                            title="Editar item"
+                          >
+                            <Edit2 className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleRemoveFromList(index)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                            title="Remover item"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <form onSubmit={handleAddToList} noValidate className="space-y-3 lg:space-y-4">
             <div className="lg:grid lg:grid-cols-2 lg:gap-6">
               <div>
                 <label className="block text-gray-700 text-sm font-bold mb-2">
@@ -409,6 +656,28 @@ const Exit = () => {
             </div>
 
             <div className="flex justify-end space-x-4 pt-4">
+              {editingIndex !== null && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingIndex(null);
+                    setFormData({
+                      codigo: "",
+                      itemId: "",
+                      quantidade: "",
+                      setorDestino: "",
+                      retiradoPor: "",
+                      observacao: "",
+                    });
+                    setItemFound(null);
+                    setSearchTerm("");
+                  }}
+                  className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition flex items-center space-x-2"
+                >
+                  <XCircle className="w-5 h-5" />
+                  <span>Cancelar Edição</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => navigate("/items")}
@@ -419,13 +688,15 @@ const Exit = () => {
               <button
                 type="submit"
                 disabled={loading || !itemFound}
-                className="action-button px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed transition relative overflow-hidden"
+                className="action-button px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed transition relative overflow-hidden"
               >
                 <div className="action-button-ring">
                   <i></i>
                 </div>
-                <Save className="w-5 h-5 relative z-10" />
-                <span className="relative z-10">{loading ? "Registrando..." : "Registrar Saída"}</span>
+                <Plus className="w-5 h-5 relative z-10" />
+                <span className="relative z-10">
+                  {editingIndex !== null ? "Atualizar Item" : "Adicionar à Lista"}
+                </span>
               </button>
             </div>
           </form>

@@ -190,6 +190,35 @@ export const getEntriesByDate = async (date = new Date()) => {
 };
 
 // -------------------------------------------------------
+//  ENTRADAS POR INTERVALO DE DATAS
+// -------------------------------------------------------
+export const getEntriesByDateRange = async (startDate, endDate) => {
+  try {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    const q = query(
+      collection(db, ENTRIES_COLLECTION),
+      where("data", ">=", Timestamp.fromDate(start)),
+      where("data", "<=", Timestamp.fromDate(end)),
+      orderBy("data", "desc")
+    );
+
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  } catch (error) {
+    console.error("Erro ao buscar entradas por intervalo de datas:", error);
+    throw error;
+  }
+};
+
+// -------------------------------------------------------
 //  ÚLTIMAS N ENTRADAS
 // -------------------------------------------------------
 export const getRecentEntries = async (limit = 5) => {

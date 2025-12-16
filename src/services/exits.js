@@ -195,6 +195,35 @@ export const getExitsByDate = async (date = new Date()) => {
 };
 
 /**
+ * Busca saídas por intervalo de datas
+ */
+export const getExitsByDateRange = async (startDate, endDate) => {
+  try {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    const q = query(
+      collection(db, EXITS_COLLECTION),
+      where("data", ">=", Timestamp.fromDate(start)),
+      where("data", "<=", Timestamp.fromDate(end)),
+      orderBy("data", "desc")
+    );
+
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }));
+  } catch (error) {
+    console.error("Erro ao buscar saídas por intervalo de datas:", error);
+    throw error;
+  }
+};
+
+/**
  * Últimas N saídas
  */
 export const getRecentExits = async (limit = 5) => {

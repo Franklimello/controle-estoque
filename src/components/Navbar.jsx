@@ -12,6 +12,9 @@ import {
   X,
   User,
   Lock,
+  FileText,
+  ShoppingCart,
+  PackageCheck,
 } from "lucide-react";
 import logoPrefeitura from "../assets/prefeiturajpg.png";
 
@@ -49,6 +52,24 @@ const Navbar = () => {
       icon: History,
       label: "Hist. Saídas",
       adminOnly: false,
+    },
+    {
+      to: "/reports",
+      icon: FileText,
+      label: "Relatórios",
+      adminOnly: false,
+    },
+    {
+      to: "/orders",
+      icon: ShoppingCart,
+      label: "Pedidos",
+      adminOnly: false,
+    },
+    {
+      to: "/orders-management",
+      icon: PackageCheck,
+      label: "Gerenciar Pedidos",
+      adminOnly: true,
     },
   ];
 

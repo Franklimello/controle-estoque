@@ -97,6 +97,36 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if false;
     }
+
+    // Regras para a coleção 'orders'
+    match /orders/{orderId} {
+      // Permitir leitura para:
+      // - Admin pode ler todos os pedidos
+      // - Usuário pode ler seus próprios pedidos
+      allow get: if isAuthenticated() 
+        && (isAdmin() || resource.data.solicitadoPor == request.auth.uid);
+      
+      // Permitir listagem para usuários autenticados
+      // O código da aplicação garante que:
+      // - Admin usa getOrders() para ver todos
+      // - Usuários comuns usam getUserOrders() que filtra por solicitadoPor
+      allow list: if isAuthenticated();
+      
+      // Permitir criação para qualquer usuário autenticado
+      // Validar campos obrigatórios
+      allow create: if isAuthenticated()
+        && request.resource.data.status == "pendente"
+        && request.resource.data.solicitadoPor == request.auth.uid
+        && request.resource.data.itens is list
+        && request.resource.data.setorDestino is string;
+      
+      // Permitir atualização apenas para admin (aprovar/rejeitar/finalizar)
+      allow update: if isAdmin()
+        && request.resource.data.status in ["pendente", "aprovado", "rejeitado", "finalizado"];
+      
+      // Não permitir exclusão de pedidos (histórico imutável)
+      allow delete: if false;
+    }
   }
 }
 
