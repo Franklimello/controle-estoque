@@ -75,10 +75,15 @@ const ExitsHistory = () => {
       try {
         setLoading(true);
         const data = await getExits();
+        console.log("✅ Saídas carregadas:", data.length);
         setExits(data);
         setFilteredExits(data);
       } catch (error) {
-        console.error("Erro ao carregar saídas:", error);
+        console.error("❌ Erro ao carregar saídas:", error);
+        console.error("Detalhes do erro:", error.message, error.code);
+        // Garantir que arrays vazios sejam definidos mesmo em caso de erro
+        setExits([]);
+        setFilteredExits([]);
       } finally {
         setLoading(false);
       }

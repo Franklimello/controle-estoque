@@ -4,14 +4,23 @@ import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 // Your web app's Firebase configuration
+// As credenciais são carregadas das variáveis de ambiente
+// Configure o arquivo .env na raiz do projeto com suas credenciais do Firebase
 const firebaseConfig = {
-  apiKey: "AIzaSyCh-55LWeahrnI1jyCp8dEBm2rs7IN5gHg",
-  authDomain: "controle-estoque-d918f.firebaseapp.com",
-  projectId: "controle-estoque-d918f",
-  storageBucket: "controle-estoque-d918f.firebasestorage.app",
-  messagingSenderId: "219528544550",
-  appId: "1:219528544550:web:5d7790a7cb85d502a881e7"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID
 };
+
+// Validação das variáveis de ambiente
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  console.error("❌ Erro: Variáveis de ambiente do Firebase não configuradas!");
+  console.error("Por favor, crie um arquivo .env na raiz do projeto com as credenciais do Firebase.");
+  console.error("Veja o arquivo .env.example para um exemplo.");
+}
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);

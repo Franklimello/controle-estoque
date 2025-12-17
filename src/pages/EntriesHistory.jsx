@@ -55,10 +55,15 @@ const EntriesHistory = () => {
       try {
         setLoading(true);
         const data = await getEntries();
+        console.log("✅ Entradas carregadas:", data.length);
         setEntries(data);
         setFilteredEntries(data);
       } catch (error) {
-        console.error("Erro ao carregar entradas:", error);
+        console.error("❌ Erro ao carregar entradas:", error);
+        console.error("Detalhes do erro:", error.message, error.code);
+        // Garantir que arrays vazios sejam definidos mesmo em caso de erro
+        setEntries([]);
+        setFilteredEntries([]);
       } finally {
         setLoading(false);
       }

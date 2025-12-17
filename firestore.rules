@@ -9,7 +9,7 @@ service cloud.firestore {
 
     // Função auxiliar para verificar se o usuário é admin
     function isAdmin() {
-      return request.auth != null && (request.auth.uid == "3Jq6h72lTWRL6KQEVqKLXHwF7ZG3" || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"));
+      return request.auth != null && (request.auth.uid == "xaFyAiOHhiWEPaWElr7REqGxBXX2" || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"));
     }
     
     // Função auxiliar para verificar se a quantidade não é negativa
@@ -19,7 +19,7 @@ service cloud.firestore {
     
     // ID do administrador inicial (hardcoded para bootstrap)
     function isInitialAdmin() {
-      return request.auth != null && request.auth.uid == "3Jq6h72lTWRL6KQEVqKLXHwF7ZG3";
+      return request.auth != null && request.auth.uid == "xaFyAiOHhiWEPaWElr7REqGxBXX2";
     }
     
     // Regras para a coleção 'items'
@@ -169,6 +169,19 @@ service cloud.firestore {
         );
       
       // Não permitir exclusão de usuários
+      allow delete: if false;
+    }
+    
+    // Regras para a coleção 'auditLogs'
+    match /auditLogs/{auditId} {
+      // Apenas admins podem ler logs de auditoria
+      allow read: if isAdmin();
+      
+      // Apenas admins podem criar logs de auditoria
+      allow create: if isAdmin();
+      
+      // Não permitir atualização ou exclusão de logs de auditoria (histórico imutável)
+      allow update: if false;
       allow delete: if false;
     }
   }

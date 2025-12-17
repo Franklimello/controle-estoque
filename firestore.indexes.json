@@ -15,6 +15,20 @@
       ]
     },
     {
+      "collectionGroup": "entries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "codigo",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "exits",
       "queryScope": "COLLECTION",
       "fields": [
@@ -43,6 +57,38 @@
       ]
     },
     {
+      "collectionGroup": "itemBatches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "itemId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "quantidade",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "validadeDate",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "itemBatches",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "validadeDate",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "quantidade",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "orders",
       "queryScope": "COLLECTION",
       "fields": [
@@ -62,6 +108,20 @@
       "fields": [
         {
           "fieldPath": "solicitadoPor",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "exits",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "codigo",
           "order": "ASCENDING"
         },
         {

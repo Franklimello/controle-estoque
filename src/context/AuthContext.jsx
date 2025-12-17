@@ -5,7 +5,7 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 import { auth } from "../services/firebase";
-import { getUserRole } from "../services/users";
+import { getUserRole, initializeAdmin } from "../services/users";
 import { ADMIN_UID } from "../config/constants";
 
 const AuthContext = createContext({});
@@ -31,12 +31,34 @@ export const AuthProvider = ({ children }) => {
       if (user) {
         try {
           console.log("🔍 Verificando role do usuário:", user.uid);
+          console.log("🔑 ADMIN_UID configurado:", ADMIN_UID);
+          console.log("🔐 É o admin inicial?", user.uid === ADMIN_UID);
+          
+          // Se for o admin inicial, tentar inicializar explicitamente
+          if (user.uid === ADMIN_UID) {
+            try {
+              console.log("🔧 Inicializando administrador...");
+              await initializeAdmin(user.uid);
+              console.log("✅ Administrador inicializado com sucesso");
+            } catch (initError) {
+              console.warn("⚠️ Erro ao inicializar admin (continuando mesmo assim):", initError);
+            }
+          }
+          
           const role = await getUserRole(user.uid);
           console.log("✅ Role obtido:", role);
           setUserRole(role);
           const adminStatus = role === "admin";
           setIsAdmin(adminStatus);
           console.log("👤 Usuário é admin?", adminStatus);
+          
+          if (user.uid === ADMIN_UID && !adminStatus) {
+            console.warn("⚠️ ATENÇÃO: Usuário é o admin inicial mas não foi reconhecido como admin!");
+            console.warn("⚠️ Forçando role 'admin' localmente...");
+            // Forçar admin localmente mesmo se o banco não atualizou
+            setUserRole("admin");
+            setIsAdmin(true);
+          }
         } catch (error) {
           console.error("❌ Erro ao buscar role do usuário:", error);
           // Se for o admin inicial, garantir que seja admin mesmo com erro

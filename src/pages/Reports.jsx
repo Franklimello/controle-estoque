@@ -82,8 +82,20 @@ const Reports = () => {
         setExits([]);
       }
     } catch (error) {
-      console.error("Erro ao carregar dados do relatório:", error);
-      showError("Erro ao carregar dados do relatório. Tente novamente.");
+      console.error("❌ Erro ao carregar dados do relatório:", error);
+      console.error("Detalhes do erro:", error.message, error.code, error.originalError);
+      
+      // Se for erro de índice, mostrar mensagem mais específica
+      if (error.message?.includes("index") || error.code === "failed-precondition") {
+        showError("Índice do banco de dados não encontrado. Verifique o console para criar o índice automaticamente.");
+      } else {
+        showError(`Erro ao carregar dados: ${error.message || "Tente novamente"}`);
+      }
+      
+      // Garantir que arrays vazios sejam definidos mesmo em caso de erro
+      setEntries([]);
+      setExits([]);
+      setOrders([]);
     } finally {
       setDataLoading(false);
     }
