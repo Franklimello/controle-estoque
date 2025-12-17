@@ -12,6 +12,7 @@ import {
 import { db } from "./firebase";
 import { getItemByCodigo, decrementStock, updateItem } from "./items";
 import { consumeFromBatches, getEarliestBatchValidity } from "./batches";
+import { getErrorMessage, logError } from "../utils/errorHandler";
 
 const EXITS_COLLECTION = "exits";
 
@@ -98,8 +99,10 @@ export const addExit = async (exitData, userId) => {
 
     return exitRef.id;
   } catch (error) {
-    console.error("Erro ao adicionar saída:", error);
-    throw error;
+    logError("addExit", error, { exitData });
+    const friendlyError = new Error(getErrorMessage(error));
+    friendlyError.originalError = error;
+    throw friendlyError;
   }
 };
 
@@ -118,8 +121,10 @@ export const getExits = async () => {
       ...doc.data(),
     }));
   } catch (error) {
-    console.error("Erro ao buscar saídas:", error);
-    throw error;
+    logError("getExits", error);
+    const friendlyError = new Error(getErrorMessage(error));
+    friendlyError.originalError = error;
+    throw friendlyError;
   }
 };
 
@@ -139,8 +144,10 @@ export const getExitsByCodigo = async (codigo) => {
       ...doc.data(),
     }));
   } catch (error) {
-    console.error("Erro ao buscar saídas por código:", error);
-    throw error;
+    logError("getExitsByCodigo", error, { codigo });
+    const friendlyError = new Error(getErrorMessage(error));
+    friendlyError.originalError = error;
+    throw friendlyError;
   }
 };
 
@@ -160,8 +167,10 @@ export const getExitsBySetor = async (setor) => {
       ...doc.data(),
     }));
   } catch (error) {
-    console.error("Erro ao buscar saídas por setor:", error);
-    throw error;
+    logError("getExitsBySetor", error, { setor });
+    const friendlyError = new Error(getErrorMessage(error));
+    friendlyError.originalError = error;
+    throw friendlyError;
   }
 };
 
@@ -189,8 +198,10 @@ export const getExitsByDate = async (date = new Date()) => {
       ...doc.data(),
     }));
   } catch (error) {
-    console.error("Erro ao buscar saídas por data:", error);
-    throw error;
+    logError("getExitsByDate", error, { date });
+    const friendlyError = new Error(getErrorMessage(error));
+    friendlyError.originalError = error;
+    throw friendlyError;
   }
 };
 
@@ -218,8 +229,10 @@ export const getExitsByDateRange = async (startDate, endDate) => {
       ...doc.data(),
     }));
   } catch (error) {
-    console.error("Erro ao buscar saídas por intervalo de datas:", error);
-    throw error;
+    logError("getExitsByDateRange", error, { startDate, endDate });
+    const friendlyError = new Error(getErrorMessage(error));
+    friendlyError.originalError = error;
+    throw friendlyError;
   }
 };
 

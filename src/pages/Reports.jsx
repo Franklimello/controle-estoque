@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useItems } from "../context/ItemsContext";
 import { useAuth } from "../context/AuthContext";
-import { getEntries, getEntriesByDateRange } from "../services/entries";
-import { getExits, getExitsByDateRange } from "../services/exits";
+import { getEntriesByDateRange } from "../services/entries";
+import { getExitsByDateRange } from "../services/exits";
 import { getOrdersByDateRange } from "../services/orders";
 import { generateFullBackup } from "../services/backup";
-import { FileText, BarChart3, AlertTriangle, Package, FileSpreadsheet, Printer, ArrowDownCircle, ArrowUpCircle, Download, Database, ShoppingCart } from "lucide-react";
+import { FileText, BarChart3, AlertTriangle, Package, FileSpreadsheet, Printer, ArrowDownCircle, ArrowUpCircle, Database, ShoppingCart } from "lucide-react";
 import { formatDate } from "../utils/validators";
 import { formatExpiryDate, checkExpiringDate } from "../utils/dateUtils";
 import { useToastContext } from "../context/ToastContext";
@@ -13,9 +13,8 @@ import * as XLSX from "xlsx";
 
 const Reports = () => {
   const { items, lowStockItems, expiringItems, loading: itemsLoading } = useItems();
-  const { currentUser, isAdmin } = useAuth();
+  const { isAdmin } = useAuth();
   const { success, error: showError } = useToastContext();
-  const [loading, setLoading] = useState(false);
   const [backupLoading, setBackupLoading] = useState(false);
   const [reportType, setReportType] = useState("stock");
   const [dateRange, setDateRange] = useState({
@@ -26,18 +25,14 @@ const Reports = () => {
   const [exits, setExits] = useState([]);
   const [orders, setOrders] = useState([]);
   const [orderStatusFilter, setOrderStatusFilter] = useState("all"); // all, pendente, aprovado, rejeitado, finalizado
-  const [reportData, setReportData] = useState(null);
+  const [dataLoading, setDataLoading] = useState(false);
 
-  useEffect(() => {
-    loadReportData();
-  }, [reportType, dateRange, items, orderStatusFilter]);
-
-  const loadReportData = async () => {
+  const loadReportData = useCallback(async () => {
     // Não mostrar loading ao mudar apenas o tipo de relatório (stock, expiry não precisam de dados externos)
     if (reportType === "stock" || reportType === "expiry") {
       return;
     }
-    setLoading(true);
+    setDataLoading(true);
     try {
       if (reportType === "movements" || reportType === "entries" || reportType === "exits") {
         if (reportType === "entries") {
@@ -88,10 +83,15 @@ const Reports = () => {
       }
     } catch (error) {
       console.error("Erro ao carregar dados do relatório:", error);
+      showError("Erro ao carregar dados do relatório. Tente novamente.");
     } finally {
-      setLoading(false);
+      setDataLoading(false);
     }
-  };
+  }, [reportType, dateRange, items, orderStatusFilter, showError]);
+
+  useEffect(() => {
+    loadReportData();
+  }, [loadReportData]);
 
   const calculateStatistics = () => {
     const stats = {
@@ -804,7 +804,7 @@ const Reports = () => {
 
   const stats = calculateStatistics();
 
-  // Só mostrar loading na primeira carga, não ao mudar entre relatórios
+  // Loading state inicial
   if (itemsLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -986,6 +986,21 @@ const Reports = () => {
             </>
           )}
         </div>
+
+        {/* Loading state para dados do relatório */}
+        {dataLoading && (
+          <div className="bg-white rounded-lg shadow-md p-4 lg:p-6 mb-4 lg:mb-6 w-full max-w-[95vw] sm:max-w-full mx-auto">
+            <div className="flex items-center justify-center py-8">
+              <div className="text-center space-y-4">
+                <div className="loading-ring">
+                  <i></i>
+                  <i></i>
+                </div>
+                <p className="text-gray-700 font-medium text-sm">Carregando dados do relatório...</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Conteúdo do Relatório */}
         <div

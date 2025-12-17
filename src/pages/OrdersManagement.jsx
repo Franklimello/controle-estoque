@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useItems } from "../context/ItemsContext";
 import { useToastContext } from "../context/ToastContext";
 import { getOrders, updateOrderStatus, finalizeOrder } from "../services/orders";
-import { Check, X, Package, ShoppingCart, AlertTriangle, Clock, CheckCircle, XCircle } from "lucide-react";
+import { Check, X, Package, ShoppingCart, AlertTriangle, Clock, CheckCircle, XCircle, MessageCircle } from "lucide-react";
 import { formatDate } from "../utils/validators";
 
 const OrdersManagement = () => {
@@ -190,6 +190,28 @@ const OrdersManagement = () => {
     }
   };
 
+  // Formatar número de WhatsApp (remover caracteres não numéricos)
+  const formatWhatsAppNumber = (phone) => {
+    if (!phone) return null;
+    // Remove tudo exceto números
+    const cleaned = phone.replace(/\D/g, "");
+    // Se começar com 0, remove
+    const withoutLeadingZero = cleaned.startsWith("0") ? cleaned.substring(1) : cleaned;
+    return withoutLeadingZero || null;
+  };
+
+  // Gerar link do WhatsApp com mensagem pré-formatada
+  const getWhatsAppLink = (order) => {
+    const phone = formatWhatsAppNumber(order.whatsappSolicitante);
+    if (!phone) return null;
+
+    const message = encodeURIComponent(
+      `Olá! Seu pedido #${order.id.substring(0, 8)} está separado e pronto para ser coletado.`
+    );
+    
+    return `https://wa.me/55${phone}?text=${message}`;
+  };
+
   const getStatusBadge = (status) => {
     const badges = {
       pendente: (
@@ -348,20 +370,39 @@ const OrdersManagement = () => {
                           {order.observacaoAdmin}
                         </div>
                       )}
+                      {order.whatsappSolicitante && (
+                        <div className="mt-2 text-sm text-gray-600">
+                          <span className="font-semibold">WhatsApp:</span> {order.whatsappSolicitante}
+                        </div>
+                      )}
                     </div>
-                    <button
-                      onClick={() => {
-                        const isSelecting = selectedOrder?.id !== order.id;
-                        setSelectedOrder(isSelecting ? order : null);
-                        setObservacaoAdmin("");
-                        if (isSelecting && order.status === "aprovado") {
-                          initializeItemsToFinalize(order);
-                        }
-                      }}
-                      className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
-                    >
-                      {selectedOrder?.id === order.id ? "Ocultar" : "Ver Detalhes"}
-                    </button>
+                    <div className="flex flex-col gap-2 items-end">
+                      {getWhatsAppLink(order) && (
+                        <a
+                          href={getWhatsAppLink(order)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition flex items-center gap-2 text-sm"
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                          <span className="hidden sm:inline">Avisar no WhatsApp</span>
+                          <span className="sm:hidden">WhatsApp</span>
+                        </a>
+                      )}
+                      <button
+                        onClick={() => {
+                          const isSelecting = selectedOrder?.id !== order.id;
+                          setSelectedOrder(isSelecting ? order : null);
+                          setObservacaoAdmin("");
+                          if (isSelecting && order.status === "aprovado") {
+                            initializeItemsToFinalize(order);
+                          }
+                        }}
+                        className="px-4 py-2 text-blue-600 hover:bg-blue-50 rounded-lg transition"
+                      >
+                        {selectedOrder?.id === order.id ? "Ocultar" : "Ver Detalhes"}
+                      </button>
+                    </div>
                   </div>
 
                   {selectedOrder?.id === order.id && (

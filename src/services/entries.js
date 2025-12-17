@@ -11,6 +11,7 @@ import {
 import { db } from "./firebase";
 import { addItem, getItemByCodigo, incrementStock, updateItem } from "./items";
 import { addOrIncrementBatch, getEarliestBatchValidity } from "./batches";
+import { getErrorMessage, logError } from "../utils/errorHandler";
 
 const ENTRIES_COLLECTION = "entries";
 
@@ -114,8 +115,10 @@ export const addEntry = async (entryData, userId) => {
 
     return entryRef.id;
   } catch (error) {
-    console.error("Erro ao adicionar entrada:", error);
-    throw error;
+    logError("addEntry", error, { entryData });
+    const friendlyError = new Error(getErrorMessage(error));
+    friendlyError.originalError = error;
+    throw friendlyError;
   }
 };
 
@@ -134,8 +137,10 @@ export const getEntries = async () => {
       ...doc.data(),
     }));
   } catch (error) {
-    console.error("Erro ao buscar entradas:", error);
-    throw error;
+    logError("getEntries", error);
+    const friendlyError = new Error(getErrorMessage(error));
+    friendlyError.originalError = error;
+    throw friendlyError;
   }
 };
 
@@ -155,8 +160,10 @@ export const getEntriesByCodigo = async (codigo) => {
       ...doc.data(),
     }));
   } catch (error) {
-    console.error("Erro ao buscar entradas por código:", error);
-    throw error;
+    logError("getEntriesByCodigo", error, { codigo });
+    const friendlyError = new Error(getErrorMessage(error));
+    friendlyError.originalError = error;
+    throw friendlyError;
   }
 };
 
@@ -184,8 +191,10 @@ export const getEntriesByDate = async (date = new Date()) => {
       ...doc.data(),
     }));
   } catch (error) {
-    console.error("Erro ao buscar entradas por data:", error);
-    throw error;
+    logError("getEntriesByDate", error, { date });
+    const friendlyError = new Error(getErrorMessage(error));
+    friendlyError.originalError = error;
+    throw friendlyError;
   }
 };
 

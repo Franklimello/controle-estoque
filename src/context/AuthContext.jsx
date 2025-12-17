@@ -5,6 +5,7 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 import { auth } from "../services/firebase";
+import { getUserRole } from "../services/users";
 import { ADMIN_UID } from "../config/constants";
 
 const AuthContext = createContext({});
@@ -21,11 +22,38 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [userRole, setUserRole] = useState("user");
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
-      setIsAdmin(user?.uid === ADMIN_UID);
+      
+      if (user) {
+        try {
+          console.log("🔍 Verificando role do usuário:", user.uid);
+          const role = await getUserRole(user.uid);
+          console.log("✅ Role obtido:", role);
+          setUserRole(role);
+          const adminStatus = role === "admin";
+          setIsAdmin(adminStatus);
+          console.log("👤 Usuário é admin?", adminStatus);
+        } catch (error) {
+          console.error("❌ Erro ao buscar role do usuário:", error);
+          // Se for o admin inicial, garantir que seja admin mesmo com erro
+          if (user.uid === ADMIN_UID) {
+            console.log("🔧 Forçando role 'admin' para administrador inicial devido a erro");
+            setUserRole("admin");
+            setIsAdmin(true);
+          } else {
+            setUserRole("user");
+            setIsAdmin(false);
+          }
+        }
+      } else {
+        setUserRole("user");
+        setIsAdmin(false);
+      }
+      
       setLoading(false);
     });
 
@@ -53,6 +81,7 @@ export const AuthProvider = ({ children }) => {
   const value = {
     currentUser,
     isAdmin,
+    userRole,
     login,
     logout,
     loading

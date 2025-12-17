@@ -14,6 +14,7 @@ const Orders = () => {
   const [orderItems, setOrderItems] = useState([]);
   const [setorDestino, setSetorDestino] = useState("");
   const [observacao, setObservacao] = useState("");
+  const [whatsappSolicitante, setWhatsappSolicitante] = useState("");
   const [customProductName, setCustomProductName] = useState("");
   const [showCustomProduct, setShowCustomProduct] = useState(false);
   
@@ -156,6 +157,7 @@ const Orders = () => {
           itens: orderItems,
           setorDestino: setorDestino.trim(),
           observacao: observacao.trim(),
+          whatsappSolicitante: whatsappSolicitante.trim(),
           solicitadoPorNome: currentUser.email,
         },
         currentUser.uid
@@ -167,6 +169,7 @@ const Orders = () => {
       setOrderItems([]);
       setSetorDestino("");
       setObservacao("");
+      setWhatsappSolicitante("");
       setSearchTerm("");
     } catch (error) {
       showError("Erro ao criar pedido: " + error.message);
@@ -426,6 +429,19 @@ const Orders = () => {
                 className="w-full px-3 lg:px-4 py-2 text-sm lg:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Ex: PSF Centro, PSF Bairro X, etc."
                 required
+              />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 text-xs lg:text-sm font-bold mb-2">
+                WhatsApp do Solicitante
+              </label>
+              <input
+                type="text"
+                value={whatsappSolicitante}
+                onChange={(e) => setWhatsappSolicitante(e.target.value)}
+                className="w-full px-3 lg:px-4 py-2 text-sm lg:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Ex: (11) 99999-9999 ou 11999999999"
               />
             </div>
 

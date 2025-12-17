@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useItems } from "../context/ItemsContext";
 import { useAuth } from "../context/AuthContext";
 import ItemCard from "../components/ItemCard";
-import { Search, Plus, AlertTriangle, Clock, Printer, Filter, X, Package, ArrowDownCircle, ArrowUpCircle, FileSpreadsheet } from "lucide-react";
+import { Search, Plus, AlertTriangle, Clock, Printer, Filter, X, Package, ArrowDownCircle, ArrowUpCircle, FileSpreadsheet, ChevronLeft, ChevronRight } from "lucide-react";
 import { checkExpiringDate, formatExpiryDate } from "../utils/dateUtils";
 import { exportStockToExcel } from "../utils/exportExcel";
+import { usePagination } from "../hooks/usePagination";
 
 // Componente FilterButton movido para fora para evitar re-renderizações
 const FilterButton = ({ type, icon: Icon, label, activeColor, hoverColor, filterType, setFilterType }) => {
@@ -33,6 +34,9 @@ const Items = () => {
   const [filteredItems, setFilteredItems] = useState([]);
   const [filterType, setFilterType] = useState("all");
   const [showMobileFilters, setShowMobileFilters] = useState(false);
+  
+  // Paginação
+  const { currentItems, currentPage, totalPages, nextPage, prevPage, goToPage, hasNextPage, hasPrevPage, itemsPerPage, setItemsPerPage } = usePagination(filteredItems, 20);
 
   useEffect(() => {
     refreshItems();
@@ -399,7 +403,7 @@ const Items = () => {
           <>
             {/* Mobile Cards */}
             <div className="lg:hidden grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-              {filteredItems.map((item) => {
+              {currentItems.map((item) => {
                 const expiryInfo = checkExpiringDate(item.validade);
                 const diffDays =
                   expiryInfo.daysUntilExpiry !== null
@@ -454,7 +458,7 @@ const Items = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {filteredItems.map((item) => {
+                    {currentItems.map((item) => {
                       const expiryInfo = checkExpiringDate(item.validade);
                       const diffDays =
                         expiryInfo.daysUntilExpiry !== null
@@ -585,6 +589,77 @@ const Items = () => {
             <p className="text-sm text-blue-800">
               <span className="font-semibold">Acesso somente leitura.</span> Cadastros, edições e exclusões estão restritos a administradores.
             </p>
+          </div>
+        )}
+
+        {/* Paginação */}
+        {filteredItems.length > 0 && totalPages > 1 && (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 mt-6">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <span>Mostrando</span>
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                  className="px-2 py-1 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span>itens por página</span>
+                <span className="text-gray-400">•</span>
+                <span>
+                  Página {currentPage} de {totalPages} ({filteredItems.length} itens)
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={prevPage}
+                  disabled={!hasPrevPage}
+                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span className="hidden sm:inline">Anterior</span>
+                </button>
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    let pageNum;
+                    if (totalPages <= 5) {
+                      pageNum = i + 1;
+                    } else if (currentPage <= 3) {
+                      pageNum = i + 1;
+                    } else if (currentPage >= totalPages - 2) {
+                      pageNum = totalPages - 4 + i;
+                    } else {
+                      pageNum = currentPage - 2 + i;
+                    }
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => goToPage(pageNum)}
+                        className={`w-10 h-10 rounded-lg border transition ${
+                          currentPage === pageNum
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={nextPage}
+                  disabled={!hasNextPage}
+                  className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2"
+                >
+                  <span className="hidden sm:inline">Próxima</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
