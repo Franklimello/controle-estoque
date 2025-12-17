@@ -293,15 +293,17 @@ const EntryModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
 
             <div>
-              <label className="block text-gray-700 text-sm font-bold mb-2">Validade *</label>
+              <label className="block text-gray-700 text-sm font-bold mb-2">Validade</label>
               <input
                 type="date"
                 name="validade"
                 value={formData.validade}
                 onChange={handleChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                required
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Data de validade do lote (opcional)
+              </p>
             </div>
 
             <div>

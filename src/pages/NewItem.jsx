@@ -5,10 +5,12 @@ import { validateItem } from "../utils/validators";
 import { Save, X, Package } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToastContext } from "../context/ToastContext";
+import { getErrorMessage } from "../utils/errorHandler";
+import { PERMISSIONS } from "../config/constants";
 
 const NewItem = () => {
   const navigate = useNavigate();
-  const { isAdmin, currentUser } = useAuth();
+  const { hasPermission, currentUser } = useAuth();
   const { success, error: showError } = useToastContext();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -86,20 +88,20 @@ const NewItem = () => {
         navigate("/items");
       }, 1000);
     } catch (error) {
-      showError("Erro ao cadastrar item: " + error.message);
+      showError("Erro ao cadastrar item: " + getErrorMessage(error));
     } finally {
       setLoading(false);
     }
   };
 
-  if (!isAdmin) {
+  if (!hasPermission(PERMISSIONS.CREATE_ITEMS)) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-2xl mx-auto">
           <div className="bg-white rounded-lg shadow-md p-6">
             <h1 className="text-2xl font-bold text-gray-800 mb-4">Acesso restrito</h1>
             <p className="text-gray-600">
-              Apenas o administrador pode cadastrar novos itens.
+              Você não tem permissão para cadastrar novos itens.
             </p>
             <button
               onClick={() => navigate("/items")}

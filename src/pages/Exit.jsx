@@ -7,10 +7,12 @@ import { addExit } from "../services/exits";
 import { getItemByCodigo } from "../services/items";
 import { validateExit } from "../utils/validators";
 import { ArrowUpCircle, Save, X, AlertTriangle, Search, Plus, Trash2, Edit2, Check, XCircle } from "lucide-react";
-import { ESTOQUE_BAIXO_LIMITE } from "../config/constants";
+import { ESTOQUE_BAIXO_LIMITE, PERMISSIONS } from "../config/constants";
+import { fuzzySearch, sortByRelevance } from "../utils/fuzzySearch";
+import { getErrorMessage } from "../utils/errorHandler";
 
 const Exit = () => {
-  const { currentUser, isAdmin } = useAuth();
+  const { currentUser, hasPermission } = useAuth();
   const { items } = useItems();
   const navigate = useNavigate();
   const { success, error: showError } = useToastContext();
@@ -234,7 +236,7 @@ const Exit = () => {
           successCount++;
         } catch (error) {
           errorCount++;
-          errors.push(`${exitItem.item.nome}: ${error.message}`);
+          errors.push(`${exitItem.item.nome}: ${getErrorMessage(error)}`);
         }
       }
 
@@ -262,7 +264,7 @@ const Exit = () => {
         setEditingIndex(null);
       }
     } catch (error) {
-      showError("Erro ao registrar saídas: " + error.message);
+      showError("Erro ao registrar saídas: " + getErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -279,27 +281,24 @@ const Exit = () => {
   const alertaEstoqueBaixo =
     estoqueAposSaida !== null && estoqueAposSaida <= ESTOQUE_BAIXO_LIMITE;
 
-  // ✅ Agora o hook useMemo está no lugar CORRETO
+  // ✅ Busca fuzzy (tolerante a erros)
   const filteredItems = useMemo(() => {
     if (!searchTerm.trim()) return [];
 
-    return items
-      .filter(
-        (it) =>
-          (it.nome || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (it.codigo || "").toLowerCase().includes(searchTerm.toLowerCase())
-      )
+    const filtered = items
+      .filter((it) => fuzzySearch(it, searchTerm, ['nome', 'codigo'], 0.5))
       .slice(0, 8);
+    return sortByRelevance(filtered, searchTerm, ['nome', 'codigo']);
   }, [items, searchTerm]);
 
-  if (!isAdmin) {
+  if (!hasPermission(PERMISSIONS.CREATE_EXIT)) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-2xl mx-auto">
           <div className="bg-white rounded-lg shadow-md p-6">
             <h1 className="text-2xl font-bold text-gray-800 mb-4">Acesso restrito</h1>
             <p className="text-gray-600">
-              Apenas o administrador pode registrar saídas.
+              Você não tem permissão para registrar saídas.
             </p>
             <button
               onClick={() => navigate("/items")}

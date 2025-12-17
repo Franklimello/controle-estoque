@@ -10,7 +10,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { ADMIN_UID } from "../config/constants";
+import { ADMIN_UID, USER_ROLES, ROLE_PERMISSIONS, PERMISSIONS } from "../config/constants";
 
 const USERS_COLLECTION = "users";
 
@@ -21,7 +21,7 @@ const USERS_COLLECTION = "users";
  */
 export const getUserRole = async (userId) => {
   try {
-    if (!userId) return "user";
+    if (!userId) return USER_ROLES.READ_ONLY;
     
     const isInitialAdmin = userId === ADMIN_UID;
     
@@ -32,13 +32,13 @@ export const getUserRole = async (userId) => {
         const userDoc = await getDoc(doc(db, USERS_COLLECTION, userId));
         
         if (userDoc.exists()) {
-          const currentRole = userDoc.data().role || "user";
+          const currentRole = userDoc.data().role || USER_ROLES.READ_ONLY;
           
           // Se não tiver role "admin", atualizar
-          if (currentRole !== "admin") {
+          if (currentRole !== USER_ROLES.ADMIN) {
             try {
               await updateDoc(doc(db, USERS_COLLECTION, userId), {
-                role: "admin",
+                role: USER_ROLES.ADMIN,
                 updatedAt: serverTimestamp(),
               });
               console.log("✅ Role do administrador inicial atualizado para 'admin' no Firestore.");
@@ -51,7 +51,7 @@ export const getUserRole = async (userId) => {
           // Criar documento do admin se não existir
           try {
             await setDoc(doc(db, USERS_COLLECTION, userId), {
-              role: "admin",
+              role: USER_ROLES.ADMIN,
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             });
@@ -67,20 +67,20 @@ export const getUserRole = async (userId) => {
       }
       
       // SEMPRE retornar "admin" se for o admin inicial
-      return "admin";
+      return USER_ROLES.ADMIN;
     }
     
     // Para outros usuários, buscar do banco normalmente
     const userDoc = await getDoc(doc(db, USERS_COLLECTION, userId));
     
     if (userDoc.exists()) {
-      return userDoc.data().role || "user";
+      return userDoc.data().role || USER_ROLES.READ_ONLY;
     }
     
-    // Se não existe, criar com role "user"
+    // Se não existe, criar com role "read_only" (padrão)
     try {
       await setDoc(doc(db, USERS_COLLECTION, userId), {
-        role: "user",
+        role: USER_ROLES.READ_ONLY,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -88,14 +88,14 @@ export const getUserRole = async (userId) => {
       console.error("Erro ao criar documento do usuário:", createError);
     }
     
-    return "user";
+    return USER_ROLES.READ_ONLY;
   } catch (error) {
     console.error("Erro ao buscar role do usuário:", error);
     // Se for o admin inicial, SEMPRE retornar "admin" mesmo em caso de erro
     if (userId === ADMIN_UID) {
-      return "admin";
+      return USER_ROLES.ADMIN;
     }
-    return "user"; // Default para user em caso de erro
+    return USER_ROLES.READ_ONLY; // Default para read_only em caso de erro
   }
 };
 
@@ -106,25 +106,26 @@ export const getUserRole = async (userId) => {
  */
 export const isUserAdmin = async (userId) => {
   const role = await getUserRole(userId);
-  return role === "admin";
+  return role === USER_ROLES.ADMIN;
 };
 
 /**
  * Atualiza o role de um usuário (apenas admins podem fazer isso)
  * @param {string} userId - ID do usuário
- * @param {string} role - Novo role ('admin' ou 'user')
+ * @param {string} role - Novo role
  * @param {string} updatedBy - ID do usuário que está fazendo a atualização
  * @returns {Promise<void>}
  */
 export const updateUserRole = async (userId, role, updatedBy) => {
   try {
-    if (!["admin", "user"].includes(role)) {
-      throw new Error("Role inválido. Use 'admin' ou 'user'");
+    const validRoles = Object.values(USER_ROLES);
+    if (!validRoles.includes(role)) {
+      throw new Error(`Role inválido. Use: ${validRoles.join(", ")}`);
     }
     
     // Verificar se quem está atualizando é admin
     const updaterRole = await getUserRole(updatedBy);
-    if (updaterRole !== "admin") {
+    if (updaterRole !== USER_ROLES.ADMIN) {
       throw new Error("Apenas administradores podem atualizar roles");
     }
     
@@ -140,19 +141,115 @@ export const updateUserRole = async (userId, role, updatedBy) => {
 };
 
 /**
- * Lista todos os usuários
- * @returns {Promise<Array>} Lista de usuários
+ * Obtém as permissões de um usuário baseado no seu role
+ * @param {string} userId - ID do usuário
+ * @returns {Promise<Array<string>>} Lista de permissões
+ */
+export const getUserPermissions = async (userId) => {
+  try {
+    const role = await getUserRole(userId);
+    return ROLE_PERMISSIONS[role] || [];
+  } catch (error) {
+    console.error("Erro ao buscar permissões do usuário:", error);
+    return [];
+  }
+};
+
+/**
+ * Verifica se um usuário tem uma permissão específica
+ * @param {string} userId - ID do usuário
+ * @param {string} permission - Permissão a verificar
+ * @returns {Promise<boolean>} true se tiver a permissão
+ */
+export const hasPermission = async (userId, permission) => {
+  try {
+    const permissions = await getUserPermissions(userId);
+    return permissions.includes(permission);
+  } catch (error) {
+    console.error("Erro ao verificar permissão:", error);
+    return false;
+  }
+};
+
+/**
+ * Atualiza permissões customizadas de um usuário (apenas admins)
+ * @param {string} userId - ID do usuário
+ * @param {Array<string>} customPermissions - Lista de permissões customizadas
+ * @param {string} updatedBy - ID do usuário que está fazendo a atualização
+ * @returns {Promise<void>}
+ */
+export const updateUserPermissions = async (userId, customPermissions, updatedBy) => {
+  try {
+    // Verificar se quem está atualizando é admin
+    const updaterRole = await getUserRole(updatedBy);
+    if (updaterRole !== USER_ROLES.ADMIN) {
+      throw new Error("Apenas administradores podem atualizar permissões");
+    }
+    
+    // Validar permissões
+    const validPermissions = Object.values(PERMISSIONS);
+    const invalidPermissions = customPermissions.filter(p => !validPermissions.includes(p));
+    if (invalidPermissions.length > 0) {
+      throw new Error(`Permissões inválidas: ${invalidPermissions.join(", ")}`);
+    }
+    
+    await updateDoc(doc(db, USERS_COLLECTION, userId), {
+      customPermissions,
+      updatedAt: serverTimestamp(),
+      updatedBy,
+    });
+  } catch (error) {
+    console.error("Erro ao atualizar permissões do usuário:", error);
+    throw error;
+  }
+};
+
+/**
+ * Lista todos os usuários com informações do Firebase Auth
+ * @returns {Promise<Array>} Lista de usuários com email e informações
  */
 export const getAllUsers = async () => {
   try {
     const q = query(collection(db, USERS_COLLECTION));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map((doc) => ({
+    const users = querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
+    
+    // Buscar emails do Firebase Auth (se disponível)
+    // Nota: Para buscar emails, seria necessário usar Admin SDK ou Cloud Functions
+    // Por enquanto, retornamos apenas os dados do Firestore
+    
+    return users;
   } catch (error) {
     console.error("Erro ao buscar usuários:", error);
+    throw error;
+  }
+};
+
+/**
+ * Obtém informações completas de um usuário incluindo permissões
+ * @param {string} userId - ID do usuário
+ * @returns {Promise<Object>} Dados completos do usuário
+ */
+export const getUserInfo = async (userId) => {
+  try {
+    const userDoc = await getDoc(doc(db, USERS_COLLECTION, userId));
+    if (!userDoc.exists()) {
+      return null;
+    }
+    
+    const userData = userDoc.data();
+    const permissions = await getUserPermissions(userId);
+    
+    return {
+      id: userDoc.id,
+      ...userData,
+      permissions,
+    };
+  } catch (error) {
+    console.error("Erro ao buscar informações do usuário:", error);
     throw error;
   }
 };
@@ -179,7 +276,7 @@ export const initializeAdmin = async (adminUserId = ADMIN_UID) => {
     
     if (userDoc.exists()) {
       const currentRole = userDoc.data().role;
-      if (currentRole === "admin") {
+      if (currentRole === USER_ROLES.ADMIN) {
         console.log("Administrador já está configurado corretamente.");
         return;
       }
@@ -187,7 +284,7 @@ export const initializeAdmin = async (adminUserId = ADMIN_UID) => {
       // Atualizar para admin se não for
       // As regras do Firestore permitem que o admin inicial atualize seu próprio documento
       await updateDoc(doc(db, USERS_COLLECTION, adminUserId), {
-        role: "admin",
+        role: USER_ROLES.ADMIN,
         updatedAt: serverTimestamp(),
       });
       console.log("Role do administrador atualizado para 'admin'.");
@@ -195,7 +292,7 @@ export const initializeAdmin = async (adminUserId = ADMIN_UID) => {
       // Criar documento do admin
       // As regras do Firestore permitem que o admin inicial crie seu documento como "admin"
       await setDoc(doc(db, USERS_COLLECTION, adminUserId), {
-        role: "admin",
+        role: USER_ROLES.ADMIN,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });

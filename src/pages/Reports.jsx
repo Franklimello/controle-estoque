@@ -9,7 +9,9 @@ import { FileText, BarChart3, AlertTriangle, Package, FileSpreadsheet, Printer, 
 import { formatDate } from "../utils/validators";
 import { formatExpiryDate, checkExpiringDate } from "../utils/dateUtils";
 import { useToastContext } from "../context/ToastContext";
+import { getErrorMessage } from "../utils/errorHandler";
 import * as XLSX from "xlsx";
+import { ESTOQUE_BAIXO_LIMITE } from "../config/constants";
 
 const Reports = () => {
   const { items, lowStockItems, expiringItems, loading: itemsLoading } = useItems();
@@ -83,14 +85,8 @@ const Reports = () => {
       }
     } catch (error) {
       console.error("❌ Erro ao carregar dados do relatório:", error);
-      console.error("Detalhes do erro:", error.message, error.code, error.originalError);
-      
-      // Se for erro de índice, mostrar mensagem mais específica
-      if (error.message?.includes("index") || error.code === "failed-precondition") {
-        showError("Índice do banco de dados não encontrado. Verifique o console para criar o índice automaticamente.");
-      } else {
-        showError(`Erro ao carregar dados: ${error.message || "Tente novamente"}`);
-      }
+      const errorMsg = getErrorMessage(error);
+      showError(`Erro ao carregar dados: ${errorMsg}`);
       
       // Garantir que arrays vazios sejam definidos mesmo em caso de erro
       setEntries([]);
@@ -191,7 +187,7 @@ const Reports = () => {
             ? "Vencido"
             : expiryInfo.isExpiring
             ? "Perto do vencimento"
-            : Number(item.quantidade) < 11
+            : Number(item.quantidade) < ESTOQUE_BAIXO_LIMITE
             ? "Estoque baixo"
             : "OK";
           return [
@@ -209,7 +205,7 @@ const Reports = () => {
         ["Código", "Nome", "Categoria", "Local", "Fornecedor", "Quantidade", "Unidade", "Validade", "Status"],
         ...items.map((item) => {
           const expiryInfo = checkExpiringDate(item.validade);
-          const lowStock = Number(item.quantidade) < 11;
+          const lowStock = Number(item.quantidade) < ESTOQUE_BAIXO_LIMITE;
           const status = expiryInfo.isExpired
             ? "Vencido"
             : expiryInfo.isExpiring
@@ -453,7 +449,7 @@ const Reports = () => {
       success("Backup completo gerado com sucesso!");
     } catch (error) {
       console.error("Erro ao gerar backup:", error);
-      showError("Erro ao gerar backup: " + error.message);
+      showError("Erro ao gerar backup: " + getErrorMessage(error));
     } finally {
       setBackupLoading(false);
     }
@@ -535,7 +531,7 @@ const Reports = () => {
                     ? "Vencido"
                     : expiryInfo.isExpiring
                     ? "Perto do vencimento"
-                    : Number(item.quantidade) < 11
+                    : Number(item.quantidade) < ESTOQUE_BAIXO_LIMITE
                     ? "Estoque baixo"
                     : "OK";
                   return `
@@ -1070,7 +1066,7 @@ const Reports = () => {
                       ? "Vencido"
                       : expiryInfo.isExpiring
                       ? "Perto do vencimento"
-                      : Number(item.quantidade) < 11
+                      : Number(item.quantidade) < ESTOQUE_BAIXO_LIMITE
                       ? "Estoque baixo"
                       : "OK";
                     return (

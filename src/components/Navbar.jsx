@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { PERMISSIONS } from "../config/constants";
 import {
   LogOut,
   Home,
@@ -15,11 +16,12 @@ import {
   FileText,
   ShoppingCart,
   PackageCheck,
+  Users,
 } from "lucide-react";
 import logoPrefeitura from "../assets/prefeiturajpg.png";
 
 const Navbar = () => {
-  const { currentUser, isAdmin, logout } = useAuth();
+  const { currentUser, isAdmin, logout, hasPermission } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -37,39 +39,45 @@ const Navbar = () => {
   };
 
   const navLinks = [
-    { to: "/dashboard", icon: Home, label: "Dashboard", adminOnly: false },
-    { to: "/items", icon: List, label: "Itens", adminOnly: false },
-    { to: "/entry", icon: ArrowDownCircle, label: "Entrada", adminOnly: true },
-    { to: "/exit", icon: ArrowUpCircle, label: "Saída", adminOnly: true },
+    { to: "/dashboard", icon: Home, label: "Dashboard", permission: PERMISSIONS.VIEW_DASHBOARD },
+    { to: "/items", icon: List, label: "Itens", permission: PERMISSIONS.VIEW_ITEMS },
+    { to: "/entry", icon: ArrowDownCircle, label: "Entrada", permission: PERMISSIONS.CREATE_ENTRY },
+    { to: "/exit", icon: ArrowUpCircle, label: "Saída", permission: PERMISSIONS.CREATE_EXIT },
     {
       to: "/entries-history",
       icon: History,
       label: "Hist. Entradas",
-      adminOnly: false,
+      permission: PERMISSIONS.VIEW_ENTRIES_HISTORY,
     },
     {
       to: "/exits-history",
       icon: History,
       label: "Hist. Saídas",
-      adminOnly: false,
+      permission: PERMISSIONS.VIEW_EXITS_HISTORY,
     },
     {
       to: "/reports",
       icon: FileText,
       label: "Relatórios",
-      adminOnly: false,
+      permission: PERMISSIONS.VIEW_REPORTS,
     },
     {
       to: "/orders",
       icon: ShoppingCart,
       label: "Pedidos",
-      adminOnly: false,
+      permission: PERMISSIONS.CREATE_ORDER,
     },
     {
       to: "/orders-management",
       icon: PackageCheck,
       label: "Gerenciar Pedidos",
-      adminOnly: true,
+      permission: PERMISSIONS.MANAGE_ORDERS,
+    },
+    {
+      to: "/users-management",
+      icon: Users,
+      label: "Gerenciar Usuários",
+      permission: PERMISSIONS.MANAGE_USERS,
     },
   ];
 
@@ -160,7 +168,14 @@ const Navbar = () => {
           <div className="lg:hidden pb-4 border-t border-slate-700/50 mt-2 pt-4 animate-in slide-in-from-top duration-300">
             <div className="space-y-1.5">
               {navLinks
-                .filter((link) => (link.adminOnly ? isAdmin : true))
+                .filter((link) => {
+                  // Admin tem acesso a tudo
+                  if (isAdmin) return true;
+                  // Se não tem permissão definida, mostrar para todos autenticados
+                  if (!link.permission) return true;
+                  // Verificar se tem a permissão necessária
+                  return hasPermission(link.permission);
+                })
                 .map((link) => {
                 const Icon = link.icon;
                 const active = isActive(link.to);

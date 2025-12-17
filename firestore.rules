@@ -141,7 +141,7 @@ service cloud.firestore {
       
       // Usuário pode criar seu próprio documento (auto-registro)
       // - Administrador inicial pode criar com role "admin"
-      // - Outros usuários só podem criar com role "user"
+      // - Outros usuários só podem criar com role "read_only"
       // - Admin existente pode criar qualquer documento
       allow create: if isAuthenticated() 
         && (isAdmin() || request.auth.uid == userId)
@@ -151,21 +151,25 @@ service cloud.firestore {
           isAdmin() ||
           // Administrador inicial pode criar como admin
           (isInitialAdmin() && request.resource.data.role == "admin") ||
-          // Outros usuários só podem criar como user
-          (!isInitialAdmin() && request.resource.data.role == "user")
+          // Outros usuários só podem criar como read_only
+          (!isInitialAdmin() && request.resource.data.role == "read_only")
         );
       
-      // Apenas admin pode atualizar roles
-      // Administrador inicial pode atualizar seu próprio documento para "admin"
-      // Usuário não pode alterar seu próprio role (exceto admin inicial)
+      // Apenas admin pode atualizar documentos de usuários
+      // Administrador inicial sempre tem acesso
+      // Admin existente (verificado via documento) também tem acesso
       allow update: if isAuthenticated()
-        && request.resource.data.role is string
-        && request.resource.data.role in ["admin", "user"]
         && (
+          // Administrador inicial sempre pode atualizar qualquer documento
+          isInitialAdmin() ||
           // Admin existente pode atualizar qualquer documento
-          isAdmin() ||
-          // Administrador inicial pode atualizar seu próprio documento para "admin"
-          (isInitialAdmin() && request.auth.uid == userId && request.resource.data.role == "admin")
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
+           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin")
+        )
+        && (
+          // Se estiver atualizando role, validar que é um role válido
+          !("role" in request.resource.data) ||
+          (request.resource.data.role is string && request.resource.data.role in ["admin", "read_only", "order_only", "entry_manager"])
         );
       
       // Não permitir exclusão de usuários

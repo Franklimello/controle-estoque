@@ -2,11 +2,15 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useItems } from "../context/ItemsContext";
 import { useAuth } from "../context/AuthContext";
+import { useToastContext } from "../context/ToastContext";
 import ItemCard from "../components/ItemCard";
 import { Search, Plus, AlertTriangle, Clock, Printer, Filter, X, Package, ArrowDownCircle, ArrowUpCircle, FileSpreadsheet, ChevronLeft, ChevronRight } from "lucide-react";
 import { checkExpiringDate, formatExpiryDate } from "../utils/dateUtils";
 import { exportStockToExcel } from "../utils/exportExcel";
 import { usePagination } from "../hooks/usePagination";
+import { ESTOQUE_BAIXO_LIMITE, VENCIMENTO_PROXIMO_DIAS } from "../config/constants";
+import { fuzzySearch, sortByRelevance } from "../utils/fuzzySearch";
+import { getErrorMessage } from "../utils/errorHandler";
 
 // Componente FilterButton movido para fora para evitar re-renderizações
 const FilterButton = ({ type, icon: Icon, label, activeColor, hoverColor, filterType, setFilterType }) => {
@@ -29,6 +33,7 @@ const FilterButton = ({ type, icon: Icon, label, activeColor, hoverColor, filter
 const Items = () => {
   const { items, refreshItems } = useItems();
   const { isAdmin } = useAuth();
+  const { success, error: showError } = useToastContext();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredItems, setFilteredItems] = useState([]);
@@ -43,25 +48,25 @@ const Items = () => {
   }, [refreshItems]);
 
   const filterLowStock = (items) => {
-    return items.filter((item) => Number(item.quantidade) < 11);
+    return items.filter((item) => Number(item.quantidade) < ESTOQUE_BAIXO_LIMITE);
   };
 
   const filterNearExpiry = (itemsList) => {
     return itemsList.filter((item) => {
       const expiryInfo = checkExpiringDate(item.validade);
       if (expiryInfo.daysUntilExpiry === null) return false;
-      return expiryInfo.daysUntilExpiry >= 0 && expiryInfo.daysUntilExpiry <= 7;
+      return expiryInfo.daysUntilExpiry >= 0 && expiryInfo.daysUntilExpiry <= VENCIMENTO_PROXIMO_DIAS;
     });
   };
 
   const filterLowStockAndNearExpiry = (itemsList) => {
     return itemsList.filter((item) => {
-      const lowStock = Number(item.quantidade) < 11;
+      const lowStock = Number(item.quantidade) < ESTOQUE_BAIXO_LIMITE;
       const expiryInfo = checkExpiringDate(item.validade);
       const nearExpiry =
         expiryInfo.daysUntilExpiry !== null &&
         expiryInfo.daysUntilExpiry >= 0 &&
-        expiryInfo.daysUntilExpiry <= 7;
+        expiryInfo.daysUntilExpiry <= VENCIMENTO_PROXIMO_DIAS;
 
       return lowStock && nearExpiry;
     });
@@ -89,17 +94,18 @@ const Items = () => {
         break;
     }
 
-    // Depois aplicar busca
+    // Depois aplicar busca fuzzy (tolerante a erros)
     if (searchTerm.trim() !== "") {
-      updatedItems = updatedItems.filter(
-        (item) =>
-          item.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.codigo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.categoria?.toLowerCase().includes(searchTerm.toLowerCase())
+      updatedItems = updatedItems.filter((item) =>
+        fuzzySearch(item, searchTerm, ['nome', 'codigo', 'categoria'], 0.5)
       );
+      // Ordenar por relevância (mais similares primeiro)
+      updatedItems = sortByRelevance(updatedItems, searchTerm, ['nome', 'codigo', 'categoria']);
+    } else {
+      // Se não há busca, ordenar alfabeticamente
+      updatedItems.sort((a, b) => a.nome.localeCompare(b.nome));
     }
 
-    updatedItems.sort((a, b) => a.nome.localeCompare(b.nome));
     setFilteredItems(updatedItems);
   }, [searchTerm, items, filterType]);
 
@@ -112,10 +118,10 @@ const Items = () => {
 
   const handleExportExcel = () => {
     try {
-      exportStockToExcel(items);
+      exportStockToExcel(items, success, showError);
     } catch (error) {
       console.error("Erro ao exportar para Excel:", error);
-      alert("Erro ao exportar planilha. Tente novamente.");
+      showError(getErrorMessage(error) || "Erro ao exportar planilha. Tente novamente.");
     }
   };
 
@@ -123,7 +129,7 @@ const Items = () => {
     const itemsToPrint = filteredItems;
 
     if (!itemsToPrint || itemsToPrint.length === 0) {
-      alert("Nenhum item para imprimir com o filtro selecionado.");
+      showError("Nenhum item para imprimir com o filtro selecionado.");
       return;
     }
 
@@ -413,9 +419,9 @@ const Items = () => {
                 let badge = null;
                 let badgeColor = "";
 
-                const lowStock = Number(item.quantidade) < 11;
+                const lowStock = Number(item.quantidade) < ESTOQUE_BAIXO_LIMITE;
                 const nearExpiry =
-                  diffDays !== null && diffDays <= 7 && diffDays >= 0;
+                  diffDays !== null && diffDays <= VENCIMENTO_PROXIMO_DIAS && diffDays >= 0;
 
                 if (lowStock && nearExpiry) {
                   badge = `Baixo estoque | Vence em ${diffDays} dias`;
@@ -465,9 +471,9 @@ const Items = () => {
                           ? expiryInfo.daysUntilExpiry
                           : null;
 
-                      const lowStock = Number(item.quantidade) < 11;
+                      const lowStock = Number(item.quantidade) < ESTOQUE_BAIXO_LIMITE;
                       const nearExpiry =
-                        diffDays !== null && diffDays <= 7 && diffDays >= 0;
+                        diffDays !== null && diffDays <= VENCIMENTO_PROXIMO_DIAS && diffDays >= 0;
                       const isExpired = expiryInfo.isExpired;
 
                       let statusBadge = "";

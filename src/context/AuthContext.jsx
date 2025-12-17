@@ -5,8 +5,8 @@ import {
   onAuthStateChanged,
 } from "firebase/auth";
 import { auth } from "../services/firebase";
-import { getUserRole, initializeAdmin } from "../services/users";
-import { ADMIN_UID } from "../config/constants";
+import { getUserRole, initializeAdmin, getUserPermissions } from "../services/users";
+import { ADMIN_UID, USER_ROLES, PERMISSIONS } from "../config/constants";
 
 const AuthContext = createContext({});
 
@@ -22,7 +22,8 @@ export const AuthProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [userRole, setUserRole] = useState("user");
+  const [userRole, setUserRole] = useState(USER_ROLES.READ_ONLY);
+  const [userPermissions, setUserPermissions] = useState([]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -48,32 +49,44 @@ export const AuthProvider = ({ children }) => {
           const role = await getUserRole(user.uid);
           console.log("✅ Role obtido:", role);
           setUserRole(role);
-          const adminStatus = role === "admin";
+          const adminStatus = role === USER_ROLES.ADMIN;
           setIsAdmin(adminStatus);
           console.log("👤 Usuário é admin?", adminStatus);
           
+          // Buscar permissões do usuário
+          let permissions = await getUserPermissions(user.uid);
+          
+          // Se for admin inicial mas não foi reconhecido, forçar admin e todas as permissões
           if (user.uid === ADMIN_UID && !adminStatus) {
             console.warn("⚠️ ATENÇÃO: Usuário é o admin inicial mas não foi reconhecido como admin!");
             console.warn("⚠️ Forçando role 'admin' localmente...");
             // Forçar admin localmente mesmo se o banco não atualizou
-            setUserRole("admin");
+            setUserRole(USER_ROLES.ADMIN);
             setIsAdmin(true);
+            // Admin tem todas as permissões
+            permissions = Object.values(PERMISSIONS);
           }
+          
+          setUserPermissions(permissions);
+          console.log("🔐 Permissões do usuário:", permissions);
         } catch (error) {
           console.error("❌ Erro ao buscar role do usuário:", error);
           // Se for o admin inicial, garantir que seja admin mesmo com erro
           if (user.uid === ADMIN_UID) {
             console.log("🔧 Forçando role 'admin' para administrador inicial devido a erro");
-            setUserRole("admin");
+            setUserRole(USER_ROLES.ADMIN);
             setIsAdmin(true);
+            setUserPermissions(Object.values(PERMISSIONS));
           } else {
-            setUserRole("user");
+            setUserRole(USER_ROLES.READ_ONLY);
             setIsAdmin(false);
+            setUserPermissions([]);
           }
         }
       } else {
-        setUserRole("user");
+        setUserRole(USER_ROLES.READ_ONLY);
         setIsAdmin(false);
+        setUserPermissions([]);
       }
       
       setLoading(false);
@@ -100,10 +113,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Função helper para verificar permissões
+  const hasPermission = (permission) => {
+    if (isAdmin) return true; // Admin tem todas as permissões
+    return userPermissions.includes(permission);
+  };
+
   const value = {
     currentUser,
     isAdmin,
     userRole,
+    userPermissions,
+    hasPermission,
     login,
     logout,
     loading

@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { formatExpiryDate, checkExpiringDate } from "./dateUtils";
+import { ESTOQUE_BAIXO_LIMITE, VENCIMENTO_PROXIMO_DIAS } from "../config/constants";
 
 /**
  * Formata data para formato brasileiro (dd/mm/yyyy)
@@ -35,12 +36,12 @@ const formatDateBR = (date) => {
  * @returns {string} Status do item
  */
 const getItemStatus = (item) => {
-  const lowStock = Number(item.quantidade || 0) < 11;
+  const lowStock = Number(item.quantidade || 0) < ESTOQUE_BAIXO_LIMITE;
   const expiryInfo = checkExpiringDate(item.validade);
   const nearExpiry =
     expiryInfo.daysUntilExpiry !== null &&
     expiryInfo.daysUntilExpiry >= 0 &&
-    expiryInfo.daysUntilExpiry <= 7;
+    expiryInfo.daysUntilExpiry <= VENCIMENTO_PROXIMO_DIAS;
   const isExpired = expiryInfo.isExpired;
 
   if (lowStock && nearExpiry) {
@@ -59,10 +60,16 @@ const getItemStatus = (item) => {
 /**
  * Exporta o estoque para Excel (.xlsx) com formatação profissional
  * @param {Array} items - Lista de itens do estoque
+ * @param {Function} successCallback - Callback de sucesso (opcional)
+ * @param {Function} errorCallback - Callback de erro (opcional)
  */
-export const exportStockToExcel = (items) => {
+export const exportStockToExcel = (items, successCallback, errorCallback) => {
   if (!items || items.length === 0) {
-    alert("Nenhum item para exportar");
+    if (errorCallback) {
+      errorCallback("Nenhum item para exportar");
+    } else {
+      alert("Nenhum item para exportar");
+    }
     return;
   }
 
@@ -77,7 +84,7 @@ export const exportStockToExcel = (items) => {
   // Calcular estatísticas
   const totalItems = items.length;
   const totalQuantity = items.reduce((sum, item) => sum + (Number(item.quantidade) || 0), 0);
-  const lowStockCount = items.filter((item) => Number(item.quantidade || 0) < 11).length;
+  const lowStockCount = items.filter((item) => Number(item.quantidade || 0) < ESTOQUE_BAIXO_LIMITE).length;
   const expiringCount = items.filter((item) => {
     const expiryInfo = checkExpiringDate(item.validade);
     return expiryInfo.isExpiring && !expiryInfo.isExpired;
@@ -209,6 +216,18 @@ export const exportStockToExcel = (items) => {
   }).replace(/:/g, "-");
   const filename = `controle-estoque-${dateStr}_${timeStr}.xlsx`;
   
-  XLSX.writeFile(wb, filename);
+  try {
+    XLSX.writeFile(wb, filename);
+    if (successCallback) {
+      successCallback(`Planilha exportada com sucesso: ${filename}`);
+    }
+  } catch (error) {
+    console.error("Erro ao gerar arquivo Excel:", error);
+    if (errorCallback) {
+      errorCallback("Erro ao gerar arquivo Excel. Tente novamente.");
+    } else {
+      alert("Erro ao gerar arquivo Excel. Tente novamente.");
+    }
+  }
 };
 

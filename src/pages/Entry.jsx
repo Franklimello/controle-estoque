@@ -352,7 +352,7 @@ const Entry = () => {
 
               <div>
                 <label className="block text-gray-700 text-sm font-bold mb-2">
-                  Validade *
+                  Validade
                 </label>
                 <input
                   type="date"
@@ -362,7 +362,7 @@ const Entry = () => {
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Data de validade do lote
+                  Data de validade do lote (opcional)
                 </p>
               </div>
 

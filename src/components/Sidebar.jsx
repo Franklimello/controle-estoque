@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { PERMISSIONS } from "../config/constants";
 import {
   Home,
   List,
@@ -16,10 +17,11 @@ import {
   ChevronLeft,
   ShoppingCart,
   PackageCheck,
+  Users,
 } from "lucide-react";
 
 const Sidebar = () => {
-  const { currentUser, isAdmin, logout } = useAuth();
+  const { currentUser, isAdmin, logout, hasPermission } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -40,7 +42,7 @@ const Sidebar = () => {
       to: "/dashboard", 
       icon: Home, 
       label: "Dashboard", 
-      adminOnly: false,
+      permission: PERMISSIONS.VIEW_DASHBOARD,
       gradient: "from-blue-500 to-indigo-600",
       bgGradient: "from-blue-50 to-indigo-50",
       hoverGradient: "from-blue-100 to-indigo-100"
@@ -49,7 +51,7 @@ const Sidebar = () => {
       to: "/items", 
       icon: List, 
       label: "Itens", 
-      adminOnly: false,
+      permission: PERMISSIONS.VIEW_ITEMS,
       gradient: "from-emerald-500 to-teal-600",
       bgGradient: "from-emerald-50 to-teal-50",
       hoverGradient: "from-emerald-100 to-teal-100"
@@ -58,7 +60,7 @@ const Sidebar = () => {
       to: "/entry", 
       icon: ArrowDownCircle, 
       label: "Entrada", 
-      adminOnly: true,
+      permission: PERMISSIONS.CREATE_ENTRY,
       gradient: "from-amber-500 to-orange-600",
       bgGradient: "from-amber-50 to-orange-50",
       hoverGradient: "from-amber-100 to-orange-100"
@@ -67,7 +69,7 @@ const Sidebar = () => {
       to: "/exit", 
       icon: ArrowUpCircle, 
       label: "Saída", 
-      adminOnly: true,
+      permission: PERMISSIONS.CREATE_EXIT,
       gradient: "from-rose-500 to-red-600",
       bgGradient: "from-rose-50 to-red-50",
       hoverGradient: "from-rose-100 to-red-100"
@@ -76,7 +78,7 @@ const Sidebar = () => {
       to: "/entries-history",
       icon: History,
       label: "Hist. Entradas",
-      adminOnly: false,
+      permission: PERMISSIONS.VIEW_ENTRIES_HISTORY,
       gradient: "from-cyan-500 to-blue-600",
       bgGradient: "from-cyan-50 to-blue-50",
       hoverGradient: "from-cyan-100 to-blue-100"
@@ -85,7 +87,7 @@ const Sidebar = () => {
       to: "/exits-history",
       icon: History,
       label: "Hist. Saídas",
-      adminOnly: false,
+      permission: PERMISSIONS.VIEW_EXITS_HISTORY,
       gradient: "from-pink-500 to-rose-600",
       bgGradient: "from-pink-50 to-rose-50",
       hoverGradient: "from-pink-100 to-rose-100"
@@ -94,7 +96,7 @@ const Sidebar = () => {
       to: "/reports",
       icon: FileText,
       label: "Relatórios",
-      adminOnly: false,
+      permission: PERMISSIONS.VIEW_REPORTS,
       gradient: "from-purple-500 to-violet-600",
       bgGradient: "from-purple-50 to-violet-50",
       hoverGradient: "from-purple-100 to-violet-100"
@@ -103,7 +105,7 @@ const Sidebar = () => {
       to: "/orders",
       icon: ShoppingCart,
       label: "Pedidos",
-      adminOnly: false,
+      permission: PERMISSIONS.CREATE_ORDER,
       gradient: "from-indigo-500 to-blue-600",
       bgGradient: "from-indigo-50 to-blue-50",
       hoverGradient: "from-indigo-100 to-blue-100"
@@ -112,10 +114,19 @@ const Sidebar = () => {
       to: "/orders-management",
       icon: PackageCheck,
       label: "Gerenciar Pedidos",
-      adminOnly: true,
+      permission: PERMISSIONS.MANAGE_ORDERS,
       gradient: "from-teal-500 to-cyan-600",
       bgGradient: "from-teal-50 to-cyan-50",
       hoverGradient: "from-teal-100 to-cyan-100"
+    },
+    {
+      to: "/users-management",
+      icon: Users,
+      label: "Gerenciar Usuários",
+      permission: PERMISSIONS.MANAGE_USERS,
+      gradient: "from-purple-500 to-pink-600",
+      bgGradient: "from-purple-50 to-pink-50",
+      hoverGradient: "from-purple-100 to-pink-100"
     },
   ];
 
@@ -181,7 +192,14 @@ const Sidebar = () => {
           </div>
           <ul className="flex flex-col gap-2">
             {navLinks
-              .filter((link) => (link.adminOnly ? isAdmin : true))
+              .filter((link) => {
+                // Admin tem acesso a tudo
+                if (isAdmin) return true;
+                // Se não tem permissão definida, mostrar para todos autenticados
+                if (!link.permission) return true;
+                // Verificar se tem a permissão necessária
+                return hasPermission(link.permission);
+              })
               .map((link) => {
                 const Icon = link.icon;
                 const active = isActive(link.to);

@@ -6,11 +6,13 @@ import { Save, X, Package, Trash2 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToastContext } from "../context/ToastContext";
 import Modal from "../components/Modal";
+import { getErrorMessage } from "../utils/errorHandler";
+import { PERMISSIONS } from "../config/constants";
 
 const EditItem = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isAdmin, currentUser } = useAuth();
+  const { hasPermission, currentUser } = useAuth();
   const { success, error: showError } = useToastContext();
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
@@ -45,9 +47,10 @@ const EditItem = () => {
         } else {
           setError("Item não encontrado");
         }
-      } catch (error) {
-        setError("Erro ao carregar item: " + error.message);
-      } finally {
+    } catch (error) {
+      const errorMsg = getErrorMessage(error);
+      setError("Erro ao carregar item: " + errorMsg);
+    } finally {
         setLoadingData(false);
       }
     };
@@ -57,14 +60,14 @@ const EditItem = () => {
     }
   }, [id]);
 
-  if (!isAdmin) {
+  if (!hasPermission(PERMISSIONS.EDIT_ITEMS)) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-2xl mx-auto">
           <div className="bg-white rounded-lg shadow-md p-6">
             <h1 className="text-2xl font-bold text-gray-800 mb-4">Acesso restrito</h1>
             <p className="text-gray-600">
-              Apenas o administrador pode editar itens.
+              Você não tem permissão para editar itens.
             </p>
             <button
               onClick={() => navigate("/items")}
@@ -118,7 +121,7 @@ const EditItem = () => {
         navigate("/items");
       }, 1000);
     } catch (error) {
-      showError("Erro ao atualizar item: " + error.message);
+      showError("Erro ao atualizar item: " + getErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -133,7 +136,7 @@ const EditItem = () => {
         navigate("/items");
       }, 1000);
     } catch (error) {
-      showError("Erro ao excluir item: " + error.message);
+      showError("Erro ao excluir item: " + getErrorMessage(error));
     } finally {
       setLoading(false);
       setShowDeleteModal(false);

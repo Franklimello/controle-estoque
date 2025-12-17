@@ -4,6 +4,8 @@ import { useItems } from "../context/ItemsContext";
 import { useToastContext } from "../context/ToastContext";
 import { createOrder } from "../services/orders";
 import { ShoppingCart, Plus, Trash2, Search, Send, Package, X, Check } from "lucide-react";
+import { fuzzySearch, sortByRelevance } from "../utils/fuzzySearch";
+import { getErrorMessage } from "../utils/errorHandler";
 
 const Orders = () => {
   const { currentUser } = useAuth();
@@ -21,14 +23,14 @@ const Orders = () => {
   // Estado para itens selecionados (com quantidade)
   const [selectedItems, setSelectedItems] = useState({});
 
-  // Filtrar itens para exibição
+  // Filtrar itens para exibição com busca fuzzy
   const filteredItems = useMemo(() => {
     if (!searchTerm.trim()) return items;
-    return items.filter(
-      (it) =>
-        (it.nome || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (it.codigo || "").toLowerCase().includes(searchTerm.toLowerCase())
+    const filtered = items.filter((it) =>
+      fuzzySearch(it, searchTerm, ['nome', 'codigo'], 0.5)
     );
+    // Ordenar por relevância (mais similares primeiro)
+    return sortByRelevance(filtered, searchTerm, ['nome', 'codigo']);
   }, [items, searchTerm]);
 
   // Toggle seleção de item
@@ -172,7 +174,7 @@ const Orders = () => {
       setWhatsappSolicitante("");
       setSearchTerm("");
     } catch (error) {
-      showError("Erro ao criar pedido: " + error.message);
+      showError("Erro ao criar pedido: " + getErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -437,11 +439,12 @@ const Orders = () => {
                 WhatsApp do Solicitante
               </label>
               <input
-                type="text"
+                type="tel"
                 value={whatsappSolicitante}
                 onChange={(e) => setWhatsappSolicitante(e.target.value)}
                 className="w-full px-3 lg:px-4 py-2 text-sm lg:text-base border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="Ex: (11) 99999-9999 ou 11999999999"
+                autoComplete="tel"
               />
             </div>
 

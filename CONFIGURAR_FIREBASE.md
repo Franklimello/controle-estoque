@@ -124,3 +124,7 @@ Ao fazer deploy (ex: Firebase Hosting, Vercel, Netlify), configure as variáveis
 - O arquivo `.env` é específico para cada ambiente (desenvolvimento, produção)
 - Você pode criar `.env.local` para configurações locais que não serão commitadas
 
+
+
+
+

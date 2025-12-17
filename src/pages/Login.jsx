@@ -200,7 +200,7 @@ const Login = () => {
             <LogIn className="w-8 h-8 text-white" />
           </div>
         </div>
-        <h2>Controle de Estoque</h2>
+        <h2 className="text-2xl font-bold text-center text-black">Controle de Estoque</h2>
         <form onSubmit={handleSubmit} style={{ width: "100%", display: "flex", flexDirection: "column", gap: "20px" }}>
           {error && (
             <div className="login-error">
@@ -211,9 +211,12 @@ const Login = () => {
           <div className="login-input-box">
             <input
               type="email"
+              name="email"
+              id="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="Email"
+              autoComplete="email"
               required
             />
           </div>
@@ -221,9 +224,12 @@ const Login = () => {
           <div className="login-input-box">
             <input
               type="password"
+              name="password"
+              id="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Senha"
+              autoComplete="current-password"
               required
             />
           </div>

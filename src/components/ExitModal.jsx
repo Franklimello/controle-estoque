@@ -7,6 +7,7 @@ import { getItemByCodigo } from "../services/items";
 import { validateExit } from "../utils/validators";
 import { Save, AlertTriangle, Search } from "lucide-react";
 import { ESTOQUE_BAIXO_LIMITE } from "../config/constants";
+import { fuzzySearch, sortByRelevance } from "../utils/fuzzySearch";
 import Modal from "./Modal";
 
 const ExitModal = ({ isOpen, onClose, onSuccess }) => {
@@ -138,13 +139,10 @@ const ExitModal = ({ isOpen, onClose, onSuccess }) => {
 
   const filteredItems = useMemo(() => {
     if (!searchTerm.trim()) return [];
-    return items
-      .filter(
-        (it) =>
-          (it.nome || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (it.codigo || "").toLowerCase().includes(searchTerm.toLowerCase())
-      )
+    const filtered = items
+      .filter((it) => fuzzySearch(it, searchTerm, ['nome', 'codigo'], 0.5))
       .slice(0, 8);
+    return sortByRelevance(filtered, searchTerm, ['nome', 'codigo']);
   }, [items, searchTerm]);
 
   return (

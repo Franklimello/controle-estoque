@@ -142,10 +142,15 @@ export const formatDate = (date) => {
  * Exporta dados para CSV
  * @param {Array} data - Dados para exportar
  * @param {string} filename - Nome do arquivo
+ * @param {Function} errorCallback - Callback de erro (opcional)
  */
-export const exportToCSV = (data, filename = "export.csv") => {
+export const exportToCSV = (data, filename = "export.csv", errorCallback) => {
   if (!data || data.length === 0) {
-    alert("Nenhum dado para exportar");
+    if (errorCallback) {
+      errorCallback("Nenhum dado para exportar");
+    } else {
+      alert("Nenhum dado para exportar");
+    }
     return;
   }
   

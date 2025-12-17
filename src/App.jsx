@@ -11,6 +11,8 @@ import { ToastProvider } from "./context/ToastContext";
 import Navbar from "./components/Navbar";
 import Sidebar from "./components/Sidebar";
 import ErrorBoundary from "./components/ErrorBoundary";
+import ConnectionIndicator from "./components/ConnectionIndicator";
+import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Items from "./pages/Items";
@@ -23,8 +25,10 @@ import ExitsHistory from "./pages/ExitsHistory";
 import Reports from "./pages/Reports";
 import Orders from "./pages/Orders";
 import OrdersManagement from "./pages/OrdersManagement";
+import UsersManagement from "./pages/UsersManagement";
+import { PERMISSIONS } from "./config/constants";
 
-// Componente para proteger rotas
+// Componente para proteger rotas (apenas autenticação)
 const PrivateRoute = ({ children }) => {
   const { currentUser, loading } = useAuth();
 
@@ -51,6 +55,7 @@ const AppContent = () => {
 
   return (
     <div className="min-h-screen bg-gray-50" translate="no">
+      <ConnectionIndicator />
       {!isLoginPage && <Navbar />}
       <div className={isLoginPage ? "" : "flex"}>
         {!isLoginPage && <Sidebar />}
@@ -60,89 +65,97 @@ const AppContent = () => {
             <Route
               path="/dashboard"
               element={
-                <PrivateRoute>
+                <ProtectedRoute permission={PERMISSIONS.VIEW_DASHBOARD}>
                   <Dashboard />
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="/items"
               element={
-                <PrivateRoute>
+                <ProtectedRoute permission={PERMISSIONS.VIEW_ITEMS}>
                   <Items />
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="/new-item"
               element={
-                <PrivateRoute>
+                <ProtectedRoute permission={PERMISSIONS.CREATE_ITEMS}>
                   <NewItem />
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="/edit-item/:id"
               element={
-                <PrivateRoute>
+                <ProtectedRoute permission={PERMISSIONS.EDIT_ITEMS}>
                   <EditItem />
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="/entry"
               element={
-                <PrivateRoute>
+                <ProtectedRoute permission={PERMISSIONS.CREATE_ENTRY}>
                   <Entry />
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="/exit"
               element={
-                <PrivateRoute>
+                <ProtectedRoute permission={PERMISSIONS.CREATE_EXIT}>
                   <Exit />
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="/entries-history"
               element={
-                <PrivateRoute>
+                <ProtectedRoute permission={PERMISSIONS.VIEW_ENTRIES_HISTORY}>
                   <EntriesHistory />
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="/exits-history"
               element={
-                <PrivateRoute>
+                <ProtectedRoute permission={PERMISSIONS.VIEW_EXITS_HISTORY}>
                   <ExitsHistory />
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="/reports"
               element={
-                <PrivateRoute>
+                <ProtectedRoute permission={PERMISSIONS.VIEW_REPORTS}>
                   <Reports />
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="/orders"
               element={
-                <PrivateRoute>
+                <ProtectedRoute permission={PERMISSIONS.CREATE_ORDER}>
                   <Orders />
-                </PrivateRoute>
+                </ProtectedRoute>
               }
             />
             <Route
               path="/orders-management"
               element={
-                <PrivateRoute>
+                <ProtectedRoute permission={PERMISSIONS.MANAGE_ORDERS}>
                   <OrdersManagement />
-                </PrivateRoute>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users-management"
+              element={
+                <ProtectedRoute permission={PERMISSIONS.MANAGE_USERS}>
+                  <UsersManagement />
+                </ProtectedRoute>
               }
             />
             <Route path="/" element={<Navigate to="/items" />} />
