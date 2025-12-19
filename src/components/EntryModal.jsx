@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useToastContext } from "../context/ToastContext";
 import { addEntry } from "../services/entries";
 import { getItemByCodigo } from "../services/items";
 import { validateEntry } from "../utils/validators";
+import { CATEGORIAS_ALMOXARIFADO } from "../config/constants";
 import { ArrowDownCircle, Save, Package } from "lucide-react";
 import Modal from "./Modal";
+import ConfirmModal from "./ConfirmModal";
 
 const EntryModal = ({ isOpen, onClose, onSuccess }) => {
   const { currentUser } = useAuth();
@@ -13,7 +15,10 @@ const EntryModal = ({ isOpen, onClose, onSuccess }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showExpiredDateModal, setShowExpiredDateModal] = useState(false);
+  const [pendingEntry, setPendingEntry] = useState(null);
   const [itemFound, setItemFound] = useState(null);
+  const codigoTimeoutRef = useRef(null);
   const [formData, setFormData] = useState({
     codigo: "",
     quantidade: "",
@@ -24,7 +29,16 @@ const EntryModal = ({ isOpen, onClose, onSuccess }) => {
     unidade: "UN",
     local: "",
     validade: "",
+    semValidade: false,
   });
+
+  useEffect(() => {
+    return () => {
+      if (codigoTimeoutRef.current) {
+        clearTimeout(codigoTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleCodigoChange = async (e) => {
     const codigo = e.target.value;
@@ -32,8 +46,12 @@ const EntryModal = ({ isOpen, onClose, onSuccess }) => {
     setItemFound(null);
     setError("");
 
+    if (codigoTimeoutRef.current) {
+      clearTimeout(codigoTimeoutRef.current);
+    }
+
     if (codigo.trim().length > 0) {
-      setTimeout(async () => {
+      codigoTimeoutRef.current = setTimeout(async () => {
         const item = await getItemByCodigo(codigo);
         if (item) {
           setItemFound(item);
@@ -53,10 +71,12 @@ const EntryModal = ({ isOpen, onClose, onSuccess }) => {
   };
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: type === "checkbox" ? checked : value,
+      // Se marcar "sem validade", limpar o campo de validade
+      ...(name === "semValidade" && checked ? { validade: "" } : {}),
     }));
   };
 
@@ -80,6 +100,32 @@ const EntryModal = ({ isOpen, onClose, onSuccess }) => {
       return false;
     }
 
+    // ✅ VALIDAÇÃO DE DATA DE VALIDADE: Alertar se a validade está vencida (apenas se não for "sem validade")
+    if (!formData.semValidade && formData.validade && formData.validade.trim().length > 0) {
+      const validadeDate = new Date(formData.validade + "T00:00:00");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      validadeDate.setHours(0, 0, 0, 0);
+      
+      if (validadeDate < today) {
+        // Armazenar dados da entrada para processar após confirmação
+        setPendingEntry({
+          codigo: formData.codigo,
+          quantidade: parseFloat(formData.quantidade),
+          fornecedor: formData.fornecedor,
+          observacao: formData.observacao,
+          nome: formData.nome,
+          categoria: formData.categoria,
+          unidade: formData.unidade,
+          local: formData.local,
+          validade: formData.semValidade ? null : (formData.validade || null),
+        });
+        setShowExpiredDateModal(true);
+        setLoading(false);
+        return false;
+      }
+    }
+
     try {
       await addEntry(
         {
@@ -91,7 +137,7 @@ const EntryModal = ({ isOpen, onClose, onSuccess }) => {
           categoria: formData.categoria,
           unidade: formData.unidade,
           local: formData.local,
-          validade: formData.validade || null,
+          validade: formData.semValidade ? null : (formData.validade || null),
         },
         currentUser.uid
       );
@@ -117,6 +163,7 @@ const EntryModal = ({ isOpen, onClose, onSuccess }) => {
       unidade: "UN",
       local: "",
       validade: "",
+      semValidade: false,
     });
     setItemFound(null);
     setError("");
@@ -238,13 +285,19 @@ const EntryModal = ({ isOpen, onClose, onSuccess }) => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-gray-700 text-sm font-bold mb-2">Categoria</label>
-                    <input
-                      type="text"
+                    <select
                       name="categoria"
                       value={formData.categoria}
                       onChange={handleChange}
                       className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
+                    >
+                      <option value="">Selecione uma categoria</option>
+                      {CATEGORIAS_ALMOXARIFADO.map((categoria) => (
+                        <option key={categoria} value={categoria}>
+                          {categoria}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   <div>
@@ -294,15 +347,34 @@ const EntryModal = ({ isOpen, onClose, onSuccess }) => {
 
             <div>
               <label className="block text-gray-700 text-sm font-bold mb-2">Validade</label>
-              <input
-                type="date"
-                name="validade"
-                value={formData.validade}
-                onChange={handleChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="semValidade"
+                    checked={formData.semValidade}
+                    onChange={handleChange}
+                    className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                  />
+                  <span className="text-sm text-gray-700">
+                    Sem validade (produtos que não vencem, ex: limpeza)
+                  </span>
+                </label>
+                <input
+                  type="date"
+                  name="validade"
+                  value={formData.validade}
+                  onChange={handleChange}
+                  disabled={formData.semValidade}
+                  className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                    formData.semValidade ? "bg-gray-100 cursor-not-allowed opacity-60" : ""
+                  }`}
+                />
+              </div>
               <p className="text-xs text-gray-500 mt-1">
-                Data de validade do lote (opcional)
+                {formData.semValidade 
+                  ? "Produto sem validade - não será criado lote com data de vencimento"
+                  : "Data de validade do lote (opcional)"}
               </p>
             </div>
 
@@ -377,6 +449,32 @@ const EntryModal = ({ isOpen, onClose, onSuccess }) => {
           </p>
         </div>
       </Modal>
+
+      {/* Modal de Confirmação de Data Vencida */}
+      {showExpiredDateModal && pendingEntry && (() => {
+        const validadeDate = new Date(pendingEntry.validade + "T00:00:00");
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        validadeDate.setHours(0, 0, 0, 0);
+        const daysExpired = Math.floor((today - validadeDate) / (1000 * 60 * 60 * 24));
+        
+        return (
+          <ConfirmModal
+            isOpen={showExpiredDateModal}
+            onClose={() => {
+              setShowExpiredDateModal(false);
+              setPendingEntry(null);
+              setError("Entrada cancelada. Verifique a data de validade.");
+            }}
+            onConfirm={handleConfirmExpiredDate}
+            title="⚠️ Atenção: Data de Validade Vencida"
+            message={`A data de validade informada (${pendingEntry.validade}) está vencida há ${daysExpired} dia(s).\n\nDeseja continuar mesmo assim?`}
+            confirmText="Continuar"
+            cancelText="Cancelar"
+            variant="warning"
+          />
+        );
+      })()}
     </>
   );
 };

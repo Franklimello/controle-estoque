@@ -55,7 +55,6 @@ const EntriesHistory = () => {
       try {
         setLoading(true);
         const data = await getEntries();
-        console.log("✅ Entradas carregadas:", data.length);
         setEntries(data);
         setFilteredEntries(data);
       } catch (error) {

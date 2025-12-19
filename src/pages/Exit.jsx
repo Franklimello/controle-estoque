@@ -1,19 +1,19 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useItems } from "../context/ItemsContext";
 import { useToastContext } from "../context/ToastContext";
 import { addExit } from "../services/exits";
-import { getItemByCodigo } from "../services/items";
+import { getItemByCodigo, getItemById } from "../services/items";
 import { validateExit } from "../utils/validators";
 import { ArrowUpCircle, Save, X, AlertTriangle, Search, Plus, Trash2, Edit2, Check, XCircle } from "lucide-react";
-import { ESTOQUE_BAIXO_LIMITE, PERMISSIONS } from "../config/constants";
+import { ESTOQUE_BAIXO_LIMITE, PERMISSIONS, TIPOS_SAIDA, TIPOS_SAIDA_LABELS } from "../config/constants";
 import { fuzzySearch, sortByRelevance } from "../utils/fuzzySearch";
 import { getErrorMessage } from "../utils/errorHandler";
 
 const Exit = () => {
   const { currentUser, hasPermission } = useAuth();
-  const { items } = useItems();
+  const { items, refreshItems } = useItems();
   const navigate = useNavigate();
   const { success, error: showError } = useToastContext();
   const [loading, setLoading] = useState(false);
@@ -22,14 +22,24 @@ const Exit = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [exitItems, setExitItems] = useState([]); // Lista de itens para saída
   const [editingIndex, setEditingIndex] = useState(null); // Índice do item sendo editado
+  const codigoTimeoutRef = useRef(null);
   const [formData, setFormData] = useState({
     codigo: "",
     itemId: "",
     quantidade: "",
+    tipoSaida: TIPOS_SAIDA.NORMAL,
     setorDestino: "",
     retiradoPor: "",
     observacao: "",
   });
+
+  useEffect(() => {
+    return () => {
+      if (codigoTimeoutRef.current) {
+        clearTimeout(codigoTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleCodigoChange = async (e) => {
     const codigo = e.target.value;
@@ -37,8 +47,12 @@ const Exit = () => {
     setItemFound(null);
     setError("");
 
+    if (codigoTimeoutRef.current) {
+      clearTimeout(codigoTimeoutRef.current);
+    }
+
     if (codigo.trim().length > 0) {
-      setTimeout(async () => {
+      codigoTimeoutRef.current = setTimeout(async () => {
         const item = await getItemByCodigo(codigo);
         if (item) {
           setItemFound(item);
@@ -68,31 +82,81 @@ const Exit = () => {
     });
 
     if (!validation.isValid) {
-      setError(validation.errors.join(", "));
+      const errorMsg = validation.errors.join(", ");
+      setError(errorMsg);
       return;
     }
 
-    if (
-      !itemFound &&
-      (!formData.itemId || formData.itemId.trim().length === 0)
-    ) {
+    // Verificar se temos um item selecionado (pode ser via código ou busca)
+    const hasItemId = formData.itemId && formData.itemId.trim().length > 0;
+    if (!itemFound && !hasItemId) {
       setError("Selecione um item pelo código ou pela busca.");
       return;
     }
 
     // Verificar estoque suficiente
     const quantidadeSolicitada = parseFloat(formData.quantidade);
-    const estoqueAtual = itemFound.quantidade || 0;
+    
+    // Validar quantidade
+    if (!quantidadeSolicitada || quantidadeSolicitada <= 0 || isNaN(quantidadeSolicitada)) {
+      setError("Quantidade deve ser maior que zero.");
+      return;
+    }
+    
+    // Usar originalItemId se o item foi expandido, senão usar o id normal
+    const itemId = formData.itemId || (itemFound ? (itemFound.originalItemId || itemFound.id) : "");
+    
+    // Se não temos itemId, não podemos continuar
+    if (!itemId || itemId.trim().length === 0) {
+      setError("Item não identificado. Selecione um item pelo código ou pela busca.");
+      return;
+    }
+    
+    // ⚠️ VALIDAÇÃO EM TEMPO REAL: Verificar estoque considerando itens já na lista
+    const existingItemInList = exitItems.find(item => item.itemId === itemId);
+    const quantidadeJaNaLista = existingItemInList ? existingItemInList.quantidade : 0;
+    const quantidadeTotalSolicitada = editingIndex !== null 
+      ? quantidadeSolicitada // Se editando, usar apenas a nova quantidade
+      : quantidadeJaNaLista + quantidadeSolicitada; // Se adicionando, somar com a existente
+    
+    // Buscar item atualizado (pode ter mudado desde que foi encontrado)
+    // Se o item foi expandido (tem originalItemId), buscar pelo ID original para pegar a quantidade total
+    const searchItemId = itemFound?.originalItemId || itemId;
+    
+    const currentItem = items.find(item => {
+      const originalId = item.originalItemId || item.id;
+      return originalId === searchItemId || item.id === searchItemId;
+    });
+    
+    // Se não encontrou o item na lista atualizada, usar o itemFound
+    if (!currentItem && !itemFound) {
+      setError("Item não encontrado. Por favor, selecione o item novamente.");
+      return;
+    }
+    
+    // 🔧 CORREÇÃO: Se o item tem múltiplos lotes (isExpanded), usar quantidadeTotal, senão usar quantidade
+    let estoqueAtual = 0;
+    if (currentItem) {
+      // Se é um item expandido, usar quantidadeTotal; senão usar quantidade
+      estoqueAtual = currentItem.isExpanded && currentItem.quantidadeTotal 
+        ? currentItem.quantidadeTotal 
+        : (currentItem.quantidade || 0);
+    } else if (itemFound) {
+      // Se itemFound é expandido, usar quantidadeTotal; senão usar quantidade
+      estoqueAtual = itemFound.isExpanded && itemFound.quantidadeTotal 
+        ? itemFound.quantidadeTotal 
+        : (itemFound.quantidade || 0);
+    }
 
-    if (quantidadeSolicitada > estoqueAtual) {
+    // Permitir retirar todo o estoque (inclusive zerar) - quantidade pode ser igual ao estoque
+    if (quantidadeTotalSolicitada > estoqueAtual) {
       setError(
-        `Estoque insuficiente! Disponível: ${estoqueAtual}, Solicitado: ${quantidadeSolicitada}`
+        `Estoque insuficiente! Disponível: ${estoqueAtual}, Total solicitado: ${quantidadeTotalSolicitada}${quantidadeJaNaLista > 0 ? ` (${quantidadeJaNaLista} já na lista + ${quantidadeSolicitada} novo)` : ''}`
       );
       return;
     }
 
     // Verificar se o item já está na lista (para evitar duplicatas)
-    const itemId = formData.itemId || (itemFound ? itemFound.id : "");
     const existingIndex = exitItems.findIndex(item => item.itemId === itemId);
     
     if (existingIndex >= 0 && editingIndex === null) {
@@ -100,12 +164,39 @@ const Exit = () => {
       return;
     }
 
+    // Garantir que temos os dados do item (usar currentItem se disponível, senão itemFound)
+    // Se o item foi expandido, buscar o item original (não expandido) para ter os dados completos
+    let itemData = currentItem || itemFound;
+    
+    // Se o item é expandido, precisamos buscar o item original para ter quantidadeTotal correta
+    if (itemData && itemData.isExpanded && itemData.originalItemId) {
+      // Buscar item original na lista (não expandido)
+      const originalItem = items.find(item => 
+        (item.originalItemId || item.id) === itemData.originalItemId && !item.isExpanded
+      );
+      if (originalItem) {
+        itemData = originalItem;
+      } else {
+        // Se não encontrou, usar o item expandido mas garantir quantidadeTotal
+        itemData = {
+          ...itemData,
+          quantidade: itemData.quantidadeTotal || itemData.quantidade || 0,
+        };
+      }
+    }
+    
+    if (!itemData) {
+      setError("Dados do item não encontrados. Por favor, selecione o item novamente.");
+      return;
+    }
+    
     const newExitItem = {
       id: editingIndex !== null ? exitItems[editingIndex].id : Date.now().toString(),
       itemId: itemId,
-      codigo: formData.codigo || (itemFound ? itemFound.codigo : ""),
-      item: { ...itemFound },
+      codigo: formData.codigo || (itemData.codigo || ""),
+      item: { ...itemData },
       quantidade: quantidadeSolicitada,
+      tipoSaida: formData.tipoSaida || TIPOS_SAIDA.NORMAL,
       setorDestino: formData.setorDestino,
       retiradoPor: formData.retiradoPor,
       observacao: formData.observacao,
@@ -122,11 +213,12 @@ const Exit = () => {
       setExitItems([...exitItems, newExitItem]);
     }
 
-    // Limpar formulário
+    // Limpar formulário (manter tipoSaida)
     setFormData({
       codigo: "",
       itemId: "",
       quantidade: "",
+      tipoSaida: formData.tipoSaida || TIPOS_SAIDA.NORMAL,
       setorDestino: "",
       retiradoPor: "",
       observacao: "",
@@ -153,6 +245,7 @@ const Exit = () => {
       codigo: item.codigo || "",
       itemId: item.itemId,
       quantidade: item.quantidade.toString(),
+      tipoSaida: item.tipoSaida || TIPOS_SAIDA.NORMAL,
       setorDestino: item.setorDestino,
       retiradoPor: item.retiradoPor,
       observacao: item.observacao,
@@ -185,14 +278,18 @@ const Exit = () => {
       // Verificar estoque para cada grupo
       for (const itemId in itemsGrouped) {
         const group = itemsGrouped[itemId];
-        const currentItem = items.find(item => item.id === itemId);
         
-        if (!currentItem) {
+        // 🔧 CORREÇÃO: Buscar item original diretamente do banco para ter quantidade total correta
+        // Isso garante que mesmo com múltiplos lotes, pegamos a quantidade total do item
+        const originalItem = await getItemById(itemId);
+        
+        if (!originalItem) {
           throw new Error(`Item não encontrado: ${group[0].item.nome}`);
         }
 
         const totalQuantidade = group.reduce((sum, item) => sum + item.quantidade, 0);
-        const estoqueAtual = currentItem.quantidade || 0;
+        // O item original sempre tem a quantidade total correta (soma de todos os lotes)
+        const estoqueAtual = originalItem.quantidade || 0;
 
         if (totalQuantidade > estoqueAtual) {
           throw new Error(
@@ -210,23 +307,36 @@ const Exit = () => {
         const exitItem = exitItems[i];
         try {
           // Verificar estoque novamente antes de processar (pode ter mudado durante o processamento)
-          const currentItem = items.find(item => item.id === exitItem.itemId);
-          if (!currentItem) {
+          // 🔧 CORREÇÃO: Buscar item original diretamente do banco para ter quantidade total correta
+          const originalItem = await getItemById(exitItem.itemId);
+          
+          if (!originalItem) {
             throw new Error(`Item não encontrado: ${exitItem.item.nome}`);
           }
+          
+          // Usar o ID original do item para a saída
+          const itemIdToUse = originalItem.id;
 
-          const estoqueAtual = currentItem.quantidade || 0;
+          // O item original sempre tem a quantidade total correta (soma de todos os lotes)
+          const estoqueAtual = originalItem.quantidade || 0;
+          // Permitir retirar todo o estoque (inclusive zerar)
           if (exitItem.quantidade > estoqueAtual) {
             throw new Error(
               `Estoque insuficiente para ${exitItem.item.nome}. Disponível: ${estoqueAtual}, Solicitado: ${exitItem.quantidade}`
             );
           }
+          
+          // Permitir quantidade zero (zerar estoque) - mas isso não faz sentido, então validamos > 0
+          if (exitItem.quantidade <= 0) {
+            throw new Error(`Quantidade deve ser maior que zero para ${exitItem.item.nome}`);
+          }
 
           await addExit(
             {
               codigo: exitItem.codigo,
-              itemId: exitItem.itemId,
+              itemId: itemIdToUse,
               quantidade: exitItem.quantidade,
+              tipoSaida: exitItem.tipoSaida || TIPOS_SAIDA.NORMAL,
               setorDestino: exitItem.setorDestino,
               retiradoPor: exitItem.retiradoPor,
               observacao: exitItem.observacao,
@@ -234,6 +344,9 @@ const Exit = () => {
             currentUser.uid
           );
           successCount++;
+          
+          // 🔄 Invalidar cache automaticamente após saída bem-sucedida
+          refreshItems();
         } catch (error) {
           errorCount++;
           errors.push(`${exitItem.item.nome}: ${getErrorMessage(error)}`);
@@ -255,6 +368,7 @@ const Exit = () => {
           codigo: "",
           itemId: "",
           quantidade: "",
+          tipoSaida: TIPOS_SAIDA.NORMAL,
           setorDestino: "",
           retiradoPor: "",
           observacao: "",
@@ -270,12 +384,19 @@ const Exit = () => {
     }
   };
 
-  const isLowStock =
-    itemFound && (itemFound.quantidade || 0) <= ESTOQUE_BAIXO_LIMITE;
+  // 🔧 CORREÇÃO: Calcular estoque considerando quantidadeTotal se item expandido
+  const quantidadeAtualItem = useMemo(() => {
+    if (!itemFound) return 0;
+    return itemFound.isExpanded && itemFound.quantidadeTotal 
+      ? itemFound.quantidadeTotal 
+      : (itemFound.quantidade || 0);
+  }, [itemFound]);
+
+  const isLowStock = quantidadeAtualItem <= ESTOQUE_BAIXO_LIMITE;
 
   const estoqueAposSaida =
     itemFound && formData.quantidade
-      ? (itemFound.quantidade || 0) - parseFloat(formData.quantidade)
+      ? quantidadeAtualItem - parseFloat(formData.quantidade)
       : null;
 
   const alertaEstoqueBaixo =
@@ -332,7 +453,15 @@ const Exit = () => {
           {error && (
             <div className="alert-ring bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4 relative">
               <i></i>
-              <span className="relative z-10">{error}</span>
+              <div className="relative z-10">
+                <strong>Erro:</strong> {error}
+                <button
+                  onClick={() => setError("")}
+                  className="ml-2 text-red-800 hover:text-red-900 underline text-sm"
+                >
+                  Fechar
+                </button>
+              </div>
             </div>
           )}
 
@@ -361,7 +490,12 @@ const Exit = () => {
                   >
                     Estoque atual:{" "}
                     <strong>
-                      {itemFound.quantidade || 0} {itemFound.unidade || "UN"}
+                      {quantidadeAtualItem} {itemFound.unidade || "UN"}
+                      {itemFound.isExpanded && itemFound.quantidadeTotal && (
+                        <span className="text-xs text-gray-500 ml-1">
+                          (total em múltiplos lotes)
+                        </span>
+                      )}
                     </strong>
                   </p>
                   {estoqueAposSaida !== null && (
@@ -458,11 +592,21 @@ const Exit = () => {
                               <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0" />
                             )}
                           </div>
-                          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
+                          <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 text-sm">
                             <div>
                               <span className="text-gray-600">Quantidade: </span>
                               <span className="font-semibold text-gray-800">
                                 {exitItem.quantidade} {exitItem.item.unidade || "UN"}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-gray-600">Tipo: </span>
+                              <span className={`font-semibold ${
+                                exitItem.tipoSaida === TIPOS_SAIDA.AVARIA ? "text-red-600" :
+                                exitItem.tipoSaida === TIPOS_SAIDA.CONSUMO_INTERNO ? "text-blue-600" :
+                                "text-gray-800"
+                              }`}>
+                                {TIPOS_SAIDA_LABELS[exitItem.tipoSaida] || TIPOS_SAIDA_LABELS[TIPOS_SAIDA.NORMAL]}
                               </span>
                             </div>
                             <div>
@@ -560,9 +704,11 @@ const Exit = () => {
                         key={it.id}
                         onClick={() => {
                           setItemFound(it);
+                          // Usar originalItemId se o item foi expandido, senão usar o id normal
+                          const itemIdToUse = it.originalItemId || it.id;
                           setFormData((prev) => ({
                             ...prev,
-                            itemId: it.id,
+                            itemId: itemIdToUse,
                             codigo: it.codigo || "",
                           }));
                           setError("");
@@ -601,14 +747,29 @@ const Exit = () => {
                   onChange={handleChange}
                   step="0.01"
                   min="0.01"
-                  max={itemFound ? itemFound.quantidade : undefined}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
                 />
                 {itemFound && (
                   <p className="text-xs text-gray-500 mt-1">
-                    Máximo: {itemFound.quantidade || 0} {itemFound.unidade || "UN"}
+                    Disponível: {itemFound.quantidade || 0} {itemFound.unidade || "UN"} (pode retirar tudo, inclusive zerar)
                   </p>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-gray-700 text-sm font-bold mb-2">
+                  Tipo de Saída *
+                </label>
+                <select
+                  name="tipoSaida"
+                  value={formData.tipoSaida}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                >
+                  <option value={TIPOS_SAIDA.NORMAL}>{TIPOS_SAIDA_LABELS[TIPOS_SAIDA.NORMAL]}</option>
+                  <option value={TIPOS_SAIDA.CONSUMO_INTERNO}>{TIPOS_SAIDA_LABELS[TIPOS_SAIDA.CONSUMO_INTERNO]}</option>
+                  <option value={TIPOS_SAIDA.AVARIA}>{TIPOS_SAIDA_LABELS[TIPOS_SAIDA.AVARIA]}</option>
+                </select>
               </div>
 
               <div>
@@ -686,8 +847,9 @@ const Exit = () => {
               </button>
               <button
                 type="submit"
-                disabled={loading || !itemFound}
+                disabled={loading || (!itemFound && !formData.itemId)}
                 className="action-button px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed transition relative overflow-hidden"
+                title={!itemFound && !formData.itemId ? "Selecione um item primeiro" : ""}
               >
                 <div className="action-button-ring">
                   <i></i>

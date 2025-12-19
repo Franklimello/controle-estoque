@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useItems } from "../context/ItemsContext";
 import { useToastContext } from "../context/ToastContext";
@@ -6,7 +6,7 @@ import { addExit } from "../services/exits";
 import { getItemByCodigo } from "../services/items";
 import { validateExit } from "../utils/validators";
 import { Save, AlertTriangle, Search } from "lucide-react";
-import { ESTOQUE_BAIXO_LIMITE } from "../config/constants";
+import { ESTOQUE_BAIXO_LIMITE, TIPOS_SAIDA, TIPOS_SAIDA_LABELS } from "../config/constants";
 import { fuzzySearch, sortByRelevance } from "../utils/fuzzySearch";
 import Modal from "./Modal";
 
@@ -18,14 +18,24 @@ const ExitModal = ({ isOpen, onClose, onSuccess }) => {
   const [error, setError] = useState("");
   const [itemFound, setItemFound] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const codigoTimeoutRef = useRef(null);
   const [formData, setFormData] = useState({
     codigo: "",
     itemId: "",
     quantidade: "",
+    tipoSaida: TIPOS_SAIDA.NORMAL,
     setorDestino: "",
     retiradoPor: "",
     observacao: "",
   });
+
+  useEffect(() => {
+    return () => {
+      if (codigoTimeoutRef.current) {
+        clearTimeout(codigoTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleCodigoChange = async (e) => {
     const codigo = e.target.value;
@@ -33,8 +43,12 @@ const ExitModal = ({ isOpen, onClose, onSuccess }) => {
     setItemFound(null);
     setError("");
 
+    if (codigoTimeoutRef.current) {
+      clearTimeout(codigoTimeoutRef.current);
+    }
+
     if (codigo.trim().length > 0) {
-      setTimeout(async () => {
+      codigoTimeoutRef.current = setTimeout(async () => {
         const item = await getItemByCodigo(codigo);
         if (item) {
           setItemFound(item);
@@ -56,6 +70,7 @@ const ExitModal = ({ isOpen, onClose, onSuccess }) => {
       codigo: "",
       itemId: "",
       quantidade: "",
+      tipoSaida: TIPOS_SAIDA.NORMAL,
       setorDestino: "",
       retiradoPor: "",
       observacao: "",
@@ -101,11 +116,15 @@ const ExitModal = ({ isOpen, onClose, onSuccess }) => {
     }
 
     try {
+      // Usar originalItemId se o item foi expandido, senão usar o id normal
+      const itemIdToUse = formData.itemId || (itemFound ? (itemFound.originalItemId || itemFound.id) : "");
+      
       await addExit(
         {
           codigo: formData.codigo,
-          itemId: formData.itemId || (itemFound ? itemFound.id : ""),
+          itemId: itemIdToUse,
           quantidade: quantidadeSolicitada,
+          tipoSaida: formData.tipoSaida || TIPOS_SAIDA.NORMAL,
           setorDestino: formData.setorDestino,
           retiradoPor: formData.retiradoPor,
           observacao: formData.observacao,
@@ -235,9 +254,11 @@ const ExitModal = ({ isOpen, onClose, onSuccess }) => {
                     key={it.id}
                     onClick={() => {
                       setItemFound(it);
+                      // Usar originalItemId se o item foi expandido, senão usar o id normal
+                      const itemIdToUse = it.originalItemId || it.id;
                       setFormData((prev) => ({
                         ...prev,
-                        itemId: it.id,
+                        itemId: itemIdToUse,
                         codigo: it.codigo || "",
                       }));
                       setSearchTerm("");
@@ -260,24 +281,40 @@ const ExitModal = ({ isOpen, onClose, onSuccess }) => {
             )}
           </div>
 
-          <div>
-            <label className="block text-gray-700 text-sm font-bold mb-2">Quantidade *</label>
-            <input
-              type="number"
-              name="quantidade"
-              value={formData.quantidade}
-              onChange={handleChange}
-              step="0.01"
-              min="0.01"
-              max={itemFound ? itemFound.quantidade : undefined}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-              required
-            />
-            {itemFound && (
-              <p className="text-xs text-gray-500 mt-1">
-                Máximo disponível: {itemFound.quantidade || 0} {itemFound.unidade || "UN"}
-              </p>
-            )}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-gray-700 text-sm font-bold mb-2">Quantidade *</label>
+              <input
+                type="number"
+                name="quantidade"
+                value={formData.quantidade}
+                onChange={handleChange}
+                step="0.01"
+                min="0.01"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                required
+              />
+              {itemFound && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Disponível: {itemFound.quantidade || 0} {itemFound.unidade || "UN"} (pode retirar tudo, inclusive zerar)
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-gray-700 text-sm font-bold mb-2">Tipo de Saída *</label>
+              <select
+                name="tipoSaida"
+                value={formData.tipoSaida}
+                onChange={handleChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                required
+              >
+                <option value={TIPOS_SAIDA.NORMAL}>{TIPOS_SAIDA_LABELS[TIPOS_SAIDA.NORMAL]}</option>
+                <option value={TIPOS_SAIDA.CONSUMO_INTERNO}>{TIPOS_SAIDA_LABELS[TIPOS_SAIDA.CONSUMO_INTERNO]}</option>
+                <option value={TIPOS_SAIDA.AVARIA}>{TIPOS_SAIDA_LABELS[TIPOS_SAIDA.AVARIA]}</option>
+              </select>
+            </div>
           </div>
 
           <div>

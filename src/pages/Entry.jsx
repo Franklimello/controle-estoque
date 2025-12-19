@@ -1,21 +1,28 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToastContext } from "../context/ToastContext";
+import { useItems } from "../context/ItemsContext";
 import { addEntry } from "../services/entries";
 import { getItemByCodigo } from "../services/items";
 import { validateEntry } from "../utils/validators";
+import { CATEGORIAS_ALMOXARIFADO, PERMISSIONS } from "../config/constants";
 import { ArrowDownCircle, Save, X, Package } from "lucide-react";
 import Modal from "../components/Modal";
+import ConfirmModal from "../components/ConfirmModal";
 
 const Entry = () => {
-  const { currentUser, isAdmin } = useAuth();
+  const { currentUser, isAdmin, hasPermission } = useAuth();
   const navigate = useNavigate();
   const { success, error: showError } = useToastContext();
+  const { refreshItems } = useItems();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showExpiredDateModal, setShowExpiredDateModal] = useState(false);
+  const [pendingEntry, setPendingEntry] = useState(null);
   const [itemFound, setItemFound] = useState(null);
+  const codigoTimeoutRef = useRef(null);
   const [formData, setFormData] = useState({
     codigo: "",
     quantidade: "",
@@ -26,7 +33,16 @@ const Entry = () => {
     unidade: "UN",
     local: "",
     validade: "",
+    semValidade: false,
   });
+
+  useEffect(() => {
+    return () => {
+      if (codigoTimeoutRef.current) {
+        clearTimeout(codigoTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleCodigoChange = async (e) => {
     const codigo = e.target.value;
@@ -34,9 +50,13 @@ const Entry = () => {
     setItemFound(null);
     setError("");
 
+    if (codigoTimeoutRef.current) {
+      clearTimeout(codigoTimeoutRef.current);
+    }
+
     if (codigo.trim().length > 0) {
       // Aguardar um pouco antes de buscar (debounce)
-      setTimeout(async () => {
+      codigoTimeoutRef.current = setTimeout(async () => {
         const item = await getItemByCodigo(codigo);
         if (item) {
           setItemFound(item);
@@ -56,10 +76,12 @@ const Entry = () => {
   };
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: value,
+      [name]: type === "checkbox" ? checked : value,
+      // Se marcar "sem validade", limpar o campo de validade
+      ...(name === "semValidade" && checked ? { validade: "" } : {}),
     }));
   };
 
@@ -84,6 +106,31 @@ const Entry = () => {
       return false;
     }
 
+    // ✅ VALIDAÇÃO DE DATA DE VALIDADE: Alertar se a validade está vencida (apenas se não for "sem validade")
+    if (!formData.semValidade && formData.validade && formData.validade.trim().length > 0) {
+      const validadeDate = new Date(formData.validade + "T00:00:00");
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      validadeDate.setHours(0, 0, 0, 0);
+      
+      if (validadeDate < today) {
+        // Armazenar dados da entrada para processar após confirmação
+        setPendingEntry({
+          codigo: formData.codigo,
+          quantidade: parseFloat(formData.quantidade),
+          fornecedor: formData.fornecedor,
+          observacao: formData.observacao,
+          nome: formData.nome,
+          categoria: formData.categoria,
+          unidade: formData.unidade,
+          local: formData.local,
+          validade: formData.semValidade ? null : (formData.validade || null),
+        });
+        setShowExpiredDateModal(true);
+        return false;
+      }
+    }
+
     try {
       await addEntry(
         {
@@ -95,14 +142,17 @@ const Entry = () => {
           categoria: formData.categoria,
           unidade: formData.unidade,
           local: formData.local,
-          validade: formData.validade || null,
+          validade: formData.semValidade ? null : (formData.validade || null),
         },
         currentUser.uid
       );
 
       success("Entrada registrada com sucesso!");
+      
+      // 🔄 Invalidar cache automaticamente após entrada bem-sucedida
+      refreshItems();
 
-      // Limpar formulário
+      // Limpar formulário após um delay
       setTimeout(() => {
         setFormData({
           codigo: "",
@@ -114,13 +164,45 @@ const Entry = () => {
           unidade: "UN",
           local: "",
           validade: "",
+          semValidade: false,
         });
         setItemFound(null);
       }, 1000);
-      return true;
     } catch (error) {
       showError("Erro ao registrar entrada: " + error.message);
       return false;
+    }
+  };
+
+  const handleConfirmExpiredDate = async () => {
+    if (!pendingEntry) return;
+    
+    setLoading(true);
+    try {
+      await addEntry(pendingEntry, currentUser.uid);
+      success("Entrada registrada com sucesso!");
+      refreshItems();
+      
+      // Limpar formulário
+      setFormData({
+        codigo: "",
+        quantidade: "",
+        fornecedor: "",
+        observacao: "",
+        nome: "",
+        categoria: "",
+        unidade: "UN",
+        local: "",
+        validade: "",
+        semValidade: false,
+      });
+      setItemFound(null);
+      setPendingEntry(null);
+      setShowExpiredDateModal(false);
+    } catch (error) {
+      showError("Erro ao registrar entrada: " + error.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -160,18 +242,19 @@ const Entry = () => {
     setLoading(false);
   };
 
-  if (!isAdmin) {
+  // Verificar se tem permissão para criar entrada (admin ou permissão específica)
+  if (!isAdmin && !hasPermission(PERMISSIONS.CREATE_ENTRY)) {
     return (
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-2xl mx-auto">
           <div className="bg-white rounded-lg shadow-md p-6">
             <h1 className="text-2xl font-bold text-gray-800 mb-4">Acesso restrito</h1>
             <p className="text-gray-600">
-              Apenas o administrador pode registrar entradas.
+              Você não tem permissão para registrar entradas. Entre em contato com o administrador.
             </p>
             <button
               onClick={() => navigate("/items")}
-              className="mt-4 px-4 py-2 rounded bg-blue-600 text-white"
+              className="mt-4 px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700 transition"
             >
               Voltar para itens
             </button>
@@ -291,13 +374,19 @@ const Entry = () => {
                   <label className="block text-gray-700 text-sm font-bold mb-2">
                     Categoria
                   </label>
-                  <input
-                    type="text"
+                  <select
                     name="categoria"
                     value={formData.categoria}
                     onChange={handleChange}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
+                  >
+                    <option value="">Selecione uma categoria</option>
+                    {CATEGORIAS_ALMOXARIFADO.map((categoria) => (
+                      <option key={categoria} value={categoria}>
+                        {categoria}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
@@ -354,15 +443,34 @@ const Entry = () => {
                 <label className="block text-gray-700 text-sm font-bold mb-2">
                   Validade
                 </label>
-                <input
-                  type="date"
-                  name="validade"
-                  value={formData.validade}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
-                />
+                <div className="space-y-2">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      name="semValidade"
+                      checked={formData.semValidade}
+                      onChange={handleChange}
+                      className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                    />
+                    <span className="text-sm text-gray-700">
+                      Sem validade (produtos que não vencem, ex: limpeza)
+                    </span>
+                  </label>
+                  <input
+                    type="date"
+                    name="validade"
+                    value={formData.validade}
+                    onChange={handleChange}
+                    disabled={formData.semValidade}
+                    className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                      formData.semValidade ? "bg-gray-100 cursor-not-allowed opacity-60" : ""
+                    }`}
+                  />
+                </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  Data de validade do lote (opcional)
+                  {formData.semValidade 
+                    ? "Produto sem validade - não será criado lote com data de vencimento"
+                    : "Data de validade do lote (opcional)"}
                 </p>
               </div>
 
@@ -416,6 +524,32 @@ const Entry = () => {
           </form>
         </div>
       </div>
+
+      {/* Modal de Confirmação de Data Vencida */}
+      {showExpiredDateModal && pendingEntry && (() => {
+        const validadeDate = new Date(pendingEntry.validade + "T00:00:00");
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        validadeDate.setHours(0, 0, 0, 0);
+        const daysExpired = Math.floor((today - validadeDate) / (1000 * 60 * 60 * 24));
+        
+        return (
+          <ConfirmModal
+            isOpen={showExpiredDateModal}
+            onClose={() => {
+              setShowExpiredDateModal(false);
+              setPendingEntry(null);
+              setError("Entrada cancelada. Verifique a data de validade.");
+            }}
+            onConfirm={handleConfirmExpiredDate}
+            title="⚠️ Atenção: Data de Validade Vencida"
+            message={`A data de validade informada (${pendingEntry.validade}) está vencida há ${daysExpired} dia(s).\n\nDeseja continuar mesmo assim?`}
+            confirmText="Continuar"
+            cancelText="Cancelar"
+            variant="warning"
+          />
+        );
+      })()}
 
       {/* Modal de Confirmação de Criação */}
       <Modal

@@ -88,6 +88,7 @@ export const addExit = async (exitData, userId) => {
           ? exitData.codigo
           : "",
       quantidade: quantidadeInt,
+      tipoSaida: exitData.tipoSaida || "normal",
       setorDestino: exitData.setorDestino || "",
       retiradoPor: exitData.retiradoPor || "",
       observacao: exitData.observacao || "",

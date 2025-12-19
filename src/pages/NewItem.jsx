@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { addItem, getItemByCodigo } from "../services/items";
 import { validateItem } from "../utils/validators";
@@ -6,7 +6,7 @@ import { Save, X, Package } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useToastContext } from "../context/ToastContext";
 import { getErrorMessage } from "../utils/errorHandler";
-import { PERMISSIONS } from "../config/constants";
+import { PERMISSIONS, CATEGORIAS_ALMOXARIFADO } from "../config/constants";
 
 const NewItem = () => {
   const navigate = useNavigate();
@@ -14,6 +14,7 @@ const NewItem = () => {
   const { success, error: showError } = useToastContext();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const codigoTimeoutRef = useRef(null);
   const [formData, setFormData] = useState({
     nome: "",
     codigo: "",
@@ -24,6 +25,14 @@ const NewItem = () => {
     validade: "",
     quantidade: 0
   });
+
+  useEffect(() => {
+    return () => {
+      if (codigoTimeoutRef.current) {
+        clearTimeout(codigoTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -37,9 +46,14 @@ const NewItem = () => {
     const codigo = e.target.value;
     setFormData((prev) => ({ ...prev, codigo }));
 
+    // Limpar timeout anterior
+    if (codigoTimeoutRef.current) {
+      clearTimeout(codigoTimeoutRef.current);
+    }
+
     // Verificar duplicidade quando o usuário parar de digitar
     if (codigo.trim().length > 0) {
-      setTimeout(async () => {
+      codigoTimeoutRef.current = setTimeout(async () => {
         const existingItem = await getItemByCodigo(codigo);
         if (existingItem) {
           setError("Já existe um item com este código de barras!");
@@ -176,13 +190,19 @@ const NewItem = () => {
                 <label className="block text-gray-700 text-sm font-bold mb-2">
                   Categoria
                 </label>
-                <input
-                  type="text"
+                <select
                   name="categoria"
                   value={formData.categoria}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                >
+                  <option value="">Selecione uma categoria</option>
+                  {CATEGORIAS_ALMOXARIFADO.map((categoria) => (
+                    <option key={categoria} value={categoria}>
+                      {categoria}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>

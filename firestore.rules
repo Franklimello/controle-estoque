@@ -73,10 +73,12 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       
       // Criar/atualizar lote (quantidade não negativa)
+      // Validade pode ser string (data ou "sem-validade")
+      // validadeDate pode ser timestamp ou null (para produtos sem validade)
       allow create, update: if isAdmin()
         && request.resource.data.itemId is string
         && request.resource.data.validade is string
-        && request.resource.data.validadeDate is timestamp
+        && (request.resource.data.validadeDate is timestamp || request.resource.data.validadeDate == null)
         && isValidQuantity(request.resource.data.quantidade);
       
       // Não permitir delete via cliente
@@ -91,10 +93,12 @@ service cloud.firestore {
       // Permitir criação apenas para admin
       // Validar campos obrigatórios
       // Código é opcional (pode ser string vazia)
+      // tipoSaida é opcional (padrão: "normal")
       allow create: if isAdmin()
         && request.resource.data.itemId is string
         && (request.resource.data.codigo is string || !("codigo" in request.resource.data))
         && isValidQuantity(request.resource.data.quantidade)
+        && (request.resource.data.tipoSaida is string || !("tipoSaida" in request.resource.data))
         && request.resource.data.setorDestino is string
         && request.resource.data.usuarioQueRegistrou is string;
       
@@ -185,6 +189,29 @@ service cloud.firestore {
       allow create: if isAdmin();
       
       // Não permitir atualização ou exclusão de logs de auditoria (histórico imutável)
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // Regras para a coleção 'stockAdjustments'
+    match /stockAdjustments/{adjustmentId} {
+      // Permitir leitura apenas para admins
+      allow read: if isAdmin();
+      
+      // Permitir criação apenas para admins
+      // Validar campos obrigatórios
+      allow create: if isAdmin()
+        && request.resource.data.itemId is string
+        && request.resource.data.itemNome is string
+        && (request.resource.data.itemCodigo is string || !("itemCodigo" in request.resource.data))
+        && isValidQuantity(request.resource.data.quantidadeAnterior)
+        && isValidQuantity(request.resource.data.quantidadeNova)
+        && request.resource.data.motivo is string
+        && request.resource.data.motivo.size() > 0
+        && request.resource.data.usuarioId is string
+        && request.resource.data.usuarioId == request.auth.uid;
+      
+      // Não permitir atualização ou exclusão de ajustes (histórico imutável)
       allow update: if false;
       allow delete: if false;
     }

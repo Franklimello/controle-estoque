@@ -106,7 +106,58 @@ const Items = () => {
       updatedItems.sort((a, b) => a.nome.localeCompare(b.nome));
     }
 
-    setFilteredItems(updatedItems);
+    // 📊 AGRUPAMENTO VISUAL: Agrupar itens expandidos (lotes) do mesmo item
+    const groupedItems = [];
+    const processedOriginalIds = new Set();
+    const itemsToSkip = new Set(); // IDs de itens que já foram processados
+    
+    updatedItems.forEach((item) => {
+      // Pular itens já processados
+      if (itemsToSkip.has(item.id)) {
+        return;
+      }
+      
+      if (item.isExpanded && item.originalItemId) {
+        // Se é um lote expandido e ainda não processamos o item original
+        if (!processedOriginalIds.has(item.originalItemId)) {
+          processedOriginalIds.add(item.originalItemId);
+          
+          // Encontrar todos os lotes deste item
+          const itemLotes = updatedItems.filter(
+            (i) => i.originalItemId === item.originalItemId && i.isExpanded
+          );
+          
+          // Marcar todos os lotes para não processar novamente
+          itemLotes.forEach((lote) => {
+            itemsToSkip.add(lote.id);
+          });
+          
+          // Adicionar item "agrupador" primeiro (usar dados do primeiro lote como base)
+          const firstLote = itemLotes[0];
+          groupedItems.push({
+            ...firstLote,
+            id: `group_${item.originalItemId}`,
+            isGroupHeader: true,
+            lotesCount: itemLotes.length,
+            quantidadeTotal: firstLote.quantidadeTotal || firstLote.quantidade || 0,
+            quantidade: firstLote.quantidadeTotal || firstLote.quantidade || 0, // Mostrar total no cabeçalho
+          });
+          
+          // Adicionar os lotes como filhos
+          itemLotes.forEach((lote) => {
+            groupedItems.push({
+              ...lote,
+              isGroupChild: true,
+            });
+          });
+        }
+      } else if (!item.isExpanded || !item.originalItemId) {
+        // Item normal ou não expandido
+        groupedItems.push(item);
+      }
+    });
+
+    setFilteredItems(groupedItems);
   }, [searchTerm, items, filterType]);
 
   const filterLabels = {
@@ -434,11 +485,19 @@ const Items = () => {
                   badgeColor = "bg-yellow-500 text-white";
                 }
 
+                // Usar originalItemId se o item foi expandido, senão usar o id normal
+                const itemIdToEdit = item.originalItemId || item.id;
+                
+                // 📊 AGRUPAMENTO VISUAL: Não renderizar cabeçalho de grupo nos cards mobile
+                if (item.isGroupHeader) {
+                  return null; // Cabeçalhos de grupo só aparecem na tabela desktop
+                }
+                
                 return (
                   <ItemCard
                     key={item.id}
                     item={item}
-                    onClick={() => isAdmin && navigate(`/edit-item/${item.id}`)}
+                    onClick={() => isAdmin && navigate(`/edit-item/${itemIdToEdit}`)}
                     clickable={isAdmin}
                     badge={badge}
                     badgeColor={badgeColor}
@@ -465,7 +524,12 @@ const Items = () => {
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {currentItems.map((item) => {
-                      const expiryInfo = checkExpiringDate(item.validade);
+                      // 📊 AGRUPAMENTO VISUAL: Estilo diferente para cabeçalho de grupo e lotes
+                      const isGroupHeader = item.isGroupHeader;
+                      const isGroupChild = item.isGroupChild;
+                      
+                      // Para cabeçalhos de grupo, não calcular informações de validade
+                      const expiryInfo = isGroupHeader ? { isExpired: false, daysUntilExpiry: null } : checkExpiringDate(item.validade);
                       const diffDays =
                         expiryInfo.daysUntilExpiry !== null
                           ? expiryInfo.daysUntilExpiry
@@ -479,7 +543,10 @@ const Items = () => {
                       let statusBadge = "";
                       let statusColor = "";
 
-                      if (lowStock && nearExpiry) {
+                      if (isGroupHeader) {
+                        statusBadge = "Agrupado";
+                        statusColor = "bg-blue-500 text-white";
+                      } else if (lowStock && nearExpiry) {
                         statusBadge = `Baixo estoque | Vence em ${diffDays} dias`;
                         statusColor = "bg-orange-500 text-white";
                       } else if (lowStock) {
@@ -498,8 +565,8 @@ const Items = () => {
 
                       // Formatar validade - pode ser string, Date ou Timestamp do Firestore
                       let validade = "-";
-                      // Verificar se validade existe e não é vazia
-                      if (item.validade) {
+                      // Verificar se validade existe e não é vazia (não mostrar para cabeçalhos)
+                      if (!isGroupHeader && item.validade) {
                         // Se for Timestamp do Firestore, converter para Date
                         let validadeToFormat = item.validade;
                         if (item.validade?.toDate) {
@@ -518,18 +585,42 @@ const Items = () => {
                         }
                       }
 
+                      // Usar originalItemId se o item foi expandido, senão usar o id normal
+                      const itemIdToEdit = item.originalItemId || item.id;
+                      
                       return (
                         <tr
                           key={item.id}
                           className={`transition-all duration-200 ${
-                            isAdmin 
+                            isGroupHeader
+                              ? "bg-blue-50 border-l-4 border-blue-500 font-semibold"
+                              : isGroupChild
+                              ? "bg-gray-50 border-l-4 border-gray-300 pl-8"
+                              : isAdmin 
                               ? "cursor-pointer hover:bg-blue-50 hover:shadow-sm" 
                               : "cursor-default hover:bg-gray-50"
                           }`}
-                          onClick={() => isAdmin && navigate(`/edit-item/${item.id}`)}
+                          onClick={() => !isGroupHeader && isAdmin && navigate(`/edit-item/${itemIdToEdit}`)}
                         >
                           <td className="px-6 py-4 font-medium text-gray-900">
-                            {item.nome}
+                            {isGroupHeader ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-blue-700">{item.nome}</span>
+                                <span className="text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded-full">
+                                  {item.lotesCount} lote(s) - Total: {item.quantidadeTotal} {item.unidade || "UN"}
+                                </span>
+                              </div>
+                            ) : (
+                              <>
+                                {isGroupChild && <span className="text-gray-400 mr-2">└─</span>}
+                                {item.nome}
+                                {item.isExpanded && !isGroupHeader && (
+                                  <span className="ml-2 text-xs text-gray-500 italic">
+                                    (Lote)
+                                  </span>
+                                )}
+                              </>
+                            )}
                           </td>
                           <td className="px-6 py-4 text-gray-700">{item.codigo || "-"}</td>
                           <td className="px-6 py-4 text-gray-600">
@@ -540,26 +631,36 @@ const Items = () => {
                             {item.fornecedor || "-"}
                           </td>
                           <td className="px-6 py-4 text-center">
-                            <span
-                              className={`font-semibold ${
-                                lowStock ? "text-red-600" : "text-green-600"
-                              }`}
-                            >
-                              {item.quantidade || 0} {item.unidade || "UN"}
-                            </span>
+                            {isGroupHeader ? (
+                              <span className="font-semibold text-blue-700">
+                                {item.quantidadeTotal || item.quantidade || 0} {item.unidade || "UN"}
+                              </span>
+                            ) : (
+                              <span
+                                className={`font-semibold ${
+                                  lowStock ? "text-red-600" : "text-green-600"
+                                }`}
+                              >
+                                {item.quantidade || 0} {item.unidade || "UN"}
+                              </span>
+                            )}
                           </td>
                           <td className="px-6 py-4">
-                            <span
-                              className={`font-medium ${
-                                isExpired
-                                  ? "text-red-600"
-                                  : nearExpiry
-                                  ? "text-orange-600"
-                                  : "text-gray-700"
-                              }`}
-                            >
-                              {validade}
-                            </span>
+                            {isGroupHeader ? (
+                              <span className="text-gray-500 italic text-sm">Varia por lote</span>
+                            ) : (
+                              <span
+                                className={`font-medium ${
+                                  isExpired
+                                    ? "text-red-600"
+                                    : nearExpiry
+                                    ? "text-orange-600"
+                                    : "text-gray-700"
+                                }`}
+                              >
+                                {validade}
+                              </span>
+                            )}
                           </td>
                           <td className="px-6 py-4">
                             <span

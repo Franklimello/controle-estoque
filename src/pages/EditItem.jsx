@@ -7,7 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import { useToastContext } from "../context/ToastContext";
 import Modal from "../components/Modal";
 import { getErrorMessage } from "../utils/errorHandler";
-import { PERMISSIONS } from "../config/constants";
+import { PERMISSIONS, CATEGORIAS_ALMOXARIFADO } from "../config/constants";
 
 const EditItem = () => {
   const { id } = useParams();
@@ -217,13 +217,19 @@ const EditItem = () => {
                 <label className="block text-gray-700 text-sm font-bold mb-2">
                   Categoria
                 </label>
-                <input
-                  type="text"
+                <select
                   name="categoria"
                   value={formData.categoria}
                   onChange={handleChange}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                >
+                  <option value="">Selecione uma categoria</option>
+                  {CATEGORIAS_ALMOXARIFADO.map((categoria) => (
+                    <option key={categoria} value={categoria}>
+                      {categoria}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               <div>

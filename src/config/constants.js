@@ -36,7 +36,8 @@ export const PERMISSIONS = {
   CREATE_EXIT: "create_exit",
   CREATE_ORDER: "create_order",
   MANAGE_ORDERS: "manage_orders",
-  MANAGE_USERS: "manage_users"
+  MANAGE_USERS: "manage_users",
+  ADJUST_STOCK: "adjust_stock"
 };
 
 // Mapeamento de roles para permissões
@@ -67,6 +68,39 @@ export const ROLE_PERMISSIONS = {
     PERMISSIONS.CREATE_ORDER,
     PERMISSIONS.MANAGE_ORDERS
   ]
+};
+
+// Categorias do almoxarifado da secretaria de saúde
+export const CATEGORIAS_ALMOXARIFADO = [
+  "Medicamentos",
+  "Material Médico",
+  "Material Hospitalar",
+  "Equipamentos Médicos",
+  "Material de Limpeza",
+  "Material de Escritório",
+  "EPI (Equipamento de Proteção Individual)",
+  "Material Odontológico",
+  "Material Cirúrgico",
+  "Insumos Laboratoriais",
+  "Alimentos e Suplementos",
+  "Material de Higiene",
+  "Material de Enfermagem",
+  "Material de Radiologia",
+  "Outros"
+];
+
+// Tipos de saída de estoque
+export const TIPOS_SAIDA = {
+  NORMAL: "normal",
+  CONSUMO_INTERNO: "consumo_interno",
+  AVARIA: "avaria",
+};
+
+// Labels para os tipos de saída
+export const TIPOS_SAIDA_LABELS = {
+  [TIPOS_SAIDA.NORMAL]: "Saída Normal",
+  [TIPOS_SAIDA.CONSUMO_INTERNO]: "Consumo Interno",
+  [TIPOS_SAIDA.AVARIA]: "Avaria",
 };
 
 // Outras constantes podem ser adicionadas aqui

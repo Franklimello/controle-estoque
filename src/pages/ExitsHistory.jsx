@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { getExits } from "../services/exits";
 import { formatDate, exportToCSV } from "../utils/validators";
 import { Search, Download, ArrowUpCircle } from "lucide-react";
+import { TIPOS_SAIDA_LABELS } from "../config/constants";
 
 // --- Componente de Item da Lista (Card Mobile) ---
 const ExitListItem = ({ exit }) => {
@@ -26,6 +27,15 @@ const ExitListItem = ({ exit }) => {
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
         <dt className="text-gray-500">Código:</dt>
         <dd className="font-medium truncate">{exit.codigo}</dd>
+
+        <dt className="text-gray-500">Tipo:</dt>
+        <dd className={`truncate font-semibold ${
+          exit.tipoSaida === "avaria" ? "text-red-600" :
+          exit.tipoSaida === "consumo_interno" ? "text-blue-600" :
+          "text-gray-800"
+        }`}>
+          {TIPOS_SAIDA_LABELS[exit.tipoSaida] || TIPOS_SAIDA_LABELS["normal"]}
+        </dd>
 
         <dt className="text-gray-500">Setor Destino:</dt>
         <dd className="truncate">{exit.setorDestino || "-"}</dd>
@@ -75,7 +85,6 @@ const ExitsHistory = () => {
       try {
         setLoading(true);
         const data = await getExits();
-        console.log("✅ Saídas carregadas:", data.length);
         setExits(data);
         setFilteredExits(data);
       } catch (error) {
@@ -128,6 +137,7 @@ const ExitsHistory = () => {
     const exportData = filteredExits.map((exit) => ({
       Código: exit.codigo,
       Quantidade: exit.quantidade,
+      "Tipo de Saída": TIPOS_SAIDA_LABELS[exit.tipoSaida] || TIPOS_SAIDA_LABELS["normal"],
       "Setor Destino": exit.setorDestino || "",
       "Retirado Por": exit.retiradoPor || "",
       Observação: exit.observacao || "",
@@ -213,6 +223,7 @@ const ExitsHistory = () => {
                   <th className="px-6 py-3 min-w-[150px]">Data</th>
                   <th className="px-6 py-3 min-w-[150px]">Código</th>
                   <th className="px-6 py-3">Qtd</th>
+                  <th className="px-6 py-3 min-w-[120px]">Tipo</th>
                   <th className="px-6 py-3 min-w-[120px]">Setor</th>
                   <th className="px-6 py-3 min-w-[150px]">Retirado por</th>
                   <th className="px-6 py-3 min-w-[200px]">Obs</th>
@@ -229,6 +240,13 @@ const ExitsHistory = () => {
                       <td className="px-6 py-3 font-medium">{exit.codigo}</td>
                       <td className="px-6 py-3 text-red-600 font-semibold">
                         -{Math.abs(exit.quantidade)}
+                      </td>
+                      <td className={`px-6 py-3 font-semibold ${
+                        exit.tipoSaida === "avaria" ? "text-red-600" :
+                        exit.tipoSaida === "consumo_interno" ? "text-blue-600" :
+                        "text-gray-800"
+                      }`}>
+                        {TIPOS_SAIDA_LABELS[exit.tipoSaida] || TIPOS_SAIDA_LABELS["normal"]}
                       </td>
                       <td className="px-6 py-3">{exit.setorDestino || "-"}</td>
                       <td className="px-6 py-3">{exit.retiradoPor || "-"}</td>
@@ -251,7 +269,7 @@ const ExitsHistory = () => {
                 ) : (
                   <tr>
                     <td
-                      colSpan="7"
+                      colSpan="8"
                       className="px-6 py-4 text-center text-gray-500"
                     >
                       Nenhuma saída encontrada com os filtros atuais.

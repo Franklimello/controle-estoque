@@ -53,7 +53,7 @@ export const checkExpiringDate = (validade) => {
  * @returns {string} Data formatada
  */
 export const formatExpiryDate = (validade) => {
-  if (!validade) return "Sem validade";
+  if (!validade || validade === "sem-validade") return "Sem validade";
 
   const dateObj = parseLocalDate(validade);
   if (!dateObj || Number.isNaN(dateObj.getTime())) return "Data inválida";

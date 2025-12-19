@@ -18,6 +18,7 @@ import {
   ShoppingCart,
   PackageCheck,
   Users,
+  Settings,
 } from "lucide-react";
 
 const Sidebar = () => {
@@ -128,6 +129,15 @@ const Sidebar = () => {
       bgGradient: "from-purple-50 to-pink-50",
       hoverGradient: "from-purple-100 to-pink-100"
     },
+    {
+      to: "/stock-adjustment",
+      icon: Settings,
+      label: "Ajuste de Estoque",
+      permission: PERMISSIONS.ADJUST_STOCK,
+      gradient: "from-violet-500 to-purple-600",
+      bgGradient: "from-violet-50 to-purple-50",
+      hoverGradient: "from-violet-100 to-purple-100"
+    },
   ];
 
   if (!currentUser) return null;
@@ -211,7 +221,7 @@ const Sidebar = () => {
                       className={`
                         group relative flex items-center rounded-xl
                         transition-all duration-300 ease-out overflow-hidden
-                        ${isCollapsed ? 'px-2 py-3.5 justify-center' : 'px-4 py-3.5 gap-4'}
+                        ${isCollapsed ? 'px-2 py-2 justify-center' : 'px-3 py-2 gap-3'}
                         ${active 
                           ? `bg-gradient-to-r ${link.bgGradient} shadow-lg scale-[1.02]` 
                           : 'hover:bg-slate-50 hover:shadow-md hover:scale-[1.01]'
@@ -229,7 +239,7 @@ const Sidebar = () => {
                       {/* Active Indicator */}
                       {active && !isCollapsed && (
                         <div className={`
-                          absolute left-0 top-1/2 -translate-y-1/2 w-1 h-8 
+                          absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 
                           bg-gradient-to-b ${link.gradient} rounded-r-full
                           shadow-lg
                         `} />
@@ -239,14 +249,14 @@ const Sidebar = () => {
                       <div className={`
                         relative z-10 rounded-lg flex items-center justify-center flex-shrink-0
                         transition-all duration-300
-                        ${isCollapsed ? 'w-9 h-9' : 'w-10 h-10'}
+                        ${isCollapsed ? 'w-8 h-8' : 'w-9 h-9'}
                         ${active 
                           ? `bg-gradient-to-br ${link.gradient} shadow-lg` 
                           : 'bg-slate-100 group-hover:bg-white group-hover:shadow-md'
                         }
                       `}>
                         <Icon className={`
-                          w-5 h-5 transition-all duration-300
+                          ${isCollapsed ? 'w-4 h-4' : 'w-4 h-4'} transition-all duration-300
                           ${active 
                             ? 'text-white' 
                             : 'text-slate-600 group-hover:text-slate-800'
@@ -256,7 +266,7 @@ const Sidebar = () => {
                       
                       {/* Label */}
                       <span className={`
-                        relative z-10 flex-1 font-medium transition-all duration-300 whitespace-nowrap
+                        relative z-10 flex-1 font-medium transition-all duration-300 whitespace-nowrap text-sm
                         ${active 
                           ? 'text-slate-800 font-semibold' 
                           : 'text-slate-600 group-hover:text-slate-800'
@@ -269,7 +279,7 @@ const Sidebar = () => {
                       
                       {/* Arrow Indicator */}
                       <ChevronRight className={`
-                        relative z-10 w-4 h-4 transition-all duration-300 flex-shrink-0
+                        relative z-10 w-3.5 h-3.5 transition-all duration-300 flex-shrink-0
                         ${isCollapsed ? 'hidden' : ''}
                         ${active 
                           ? 'text-slate-700 opacity-100 translate-x-0' 
@@ -327,7 +337,11 @@ const Sidebar = () => {
                     w-1.5 h-1.5 rounded-full flex-shrink-0
                     ${isAdmin ? 'bg-blue-400' : 'bg-amber-400'}
                   `} />
-                  {isAdmin ? 'Administrador' : 'Somente leitura'}
+                  {isAdmin 
+                    ? 'Administrador' 
+                    : (hasPermission(PERMISSIONS.CREATE_ENTRY) || hasPermission(PERMISSIONS.CREATE_EXIT) || hasPermission(PERMISSIONS.CREATE_ITEMS) || hasPermission(PERMISSIONS.EDIT_ITEMS) || hasPermission(PERMISSIONS.CREATE_ORDER))
+                      ? 'Usuário' 
+                      : 'Somente leitura'}
                 </p>
               </div>
             </div>
@@ -345,13 +359,14 @@ const Sidebar = () => {
               font-semibold shadow-lg shadow-red-500/25
               hover:shadow-xl hover:shadow-red-500/40
               hover:scale-[1.02] active:scale-[0.98]
-              ${isCollapsed ? 'justify-center px-3 py-3.5' : 'justify-center gap-3 px-4 py-3.5'}
+              text-sm
+              ${isCollapsed ? 'justify-center px-2 py-2' : 'justify-center gap-2 px-3 py-2'}
             `}
             title={isCollapsed ? 'Sair da conta' : ''}
           >
             <LogOut className={`
               transition-all duration-300 group-hover:-translate-x-1
-              w-5 h-5 flex-shrink-0
+              w-4 h-4 flex-shrink-0
             `} />
             <span className={`
               transition-all duration-300 overflow-hidden whitespace-nowrap

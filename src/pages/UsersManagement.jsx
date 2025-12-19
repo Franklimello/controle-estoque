@@ -1,18 +1,19 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useToastContext } from "../context/ToastContext";
-import { getAllUsers, updateUserRole, getUserInfo } from "../services/users";
-import { USER_ROLES, ROLE_PERMISSIONS, PERMISSIONS } from "../config/constants";
-import { Users, Shield, Eye, ShoppingCart, PackageCheck, Save, Copy, Check, X } from "lucide-react";
+import { getAllUsers, updateUserPermissions, getUserInfo } from "../services/users";
+import { PERMISSIONS } from "../config/constants";
+import { Users, Save, Copy, Check, CheckSquare, Square } from "lucide-react";
 import { getErrorMessage } from "../utils/errorHandler";
 
 const UsersManagement = () => {
-  const { currentUser, isAdmin } = useAuth();
+  const { currentUser, isAdmin, refreshPermissions } = useAuth();
   const { success, error: showError } = useToastContext();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState({});
   const [copiedId, setCopiedId] = useState(null);
+  const [selectedPermissions, setSelectedPermissions] = useState({}); // { userId: [permissions] }
 
   useEffect(() => {
     if (isAdmin) {
@@ -29,15 +30,23 @@ const UsersManagement = () => {
       const usersWithInfo = await Promise.all(
         usersData.map(async (user) => {
           const info = await getUserInfo(user.id);
+          const permissions = info?.permissions || [];
           return {
             ...user,
             email: user.email || `Usuário ${user.id.substring(0, 8)}...`,
-            permissions: info?.permissions || [],
+            permissions,
           };
         })
       );
       
       setUsers(usersWithInfo);
+      
+      // Inicializar permissões selecionadas com as permissões atuais de cada usuário
+      const initialPermissions = {};
+      usersWithInfo.forEach((user) => {
+        initialPermissions[user.id] = user.permissions || [];
+      });
+      setSelectedPermissions(initialPermissions);
     } catch (error) {
       console.error("Erro ao carregar usuários:", error);
       showError("Erro ao carregar usuários: " + getErrorMessage(error));
@@ -46,17 +55,32 @@ const UsersManagement = () => {
     }
   };
 
-  const handleRoleChange = async (userId, newRole) => {
+  const handlePermissionToggle = (userId, permission) => {
+    setSelectedPermissions((prev) => {
+      const current = prev[userId] || [];
+      const isSelected = current.includes(permission);
+      
+      return {
+        ...prev,
+        [userId]: isSelected
+          ? current.filter((p) => p !== permission)
+          : [...current, permission],
+      };
+    });
+  };
+
+  const handleSavePermissions = async (userId) => {
     if (!currentUser) return;
     
     try {
       setSaving((prev) => ({ ...prev, [userId]: true }));
-      await updateUserRole(userId, newRole, currentUser.uid);
-      success(`Role do usuário atualizado para: ${getRoleLabel(newRole)}`);
+      const permissions = selectedPermissions[userId] || [];
+      await updateUserPermissions(userId, permissions, currentUser.uid);
+      success(`Permissões do usuário atualizadas com sucesso!`);
       await loadUsers();
     } catch (error) {
-      console.error("Erro ao atualizar role:", error);
-      showError("Erro ao atualizar role: " + getErrorMessage(error));
+      console.error("Erro ao atualizar permissões:", error);
+      showError("Erro ao atualizar permissões: " + getErrorMessage(error));
     } finally {
       setSaving((prev) => ({ ...prev, [userId]: false }));
     }
@@ -69,35 +93,6 @@ const UsersManagement = () => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const getRoleLabel = (role) => {
-    const labels = {
-      [USER_ROLES.ADMIN]: "Administrador",
-      [USER_ROLES.READ_ONLY]: "Somente Leitura",
-      [USER_ROLES.ORDER_ONLY]: "Apenas Pedidos",
-      [USER_ROLES.ENTRY_MANAGER]: "Entrada + Pedidos",
-    };
-    return labels[role] || role;
-  };
-
-  const getRoleIcon = (role) => {
-    const icons = {
-      [USER_ROLES.ADMIN]: Shield,
-      [USER_ROLES.READ_ONLY]: Eye,
-      [USER_ROLES.ORDER_ONLY]: ShoppingCart,
-      [USER_ROLES.ENTRY_MANAGER]: PackageCheck,
-    };
-    return icons[role] || Users;
-  };
-
-  const getRoleColor = (role) => {
-    const colors = {
-      [USER_ROLES.ADMIN]: "from-blue-500 to-indigo-600",
-      [USER_ROLES.READ_ONLY]: "from-gray-500 to-slate-600",
-      [USER_ROLES.ORDER_ONLY]: "from-amber-500 to-orange-600",
-      [USER_ROLES.ENTRY_MANAGER]: "from-green-500 to-emerald-600",
-    };
-    return colors[role] || "from-gray-400 to-gray-500";
-  };
 
   const getPermissionLabel = (permission) => {
     const labels = {
@@ -114,9 +109,25 @@ const UsersManagement = () => {
       [PERMISSIONS.CREATE_ORDER]: "Criar Pedido",
       [PERMISSIONS.MANAGE_ORDERS]: "Gerenciar Pedidos",
       [PERMISSIONS.MANAGE_USERS]: "Gerenciar Usuários",
+      [PERMISSIONS.ADJUST_STOCK]: "Ajustar Estoque",
     };
     return labels[permission] || permission;
   };
+
+  const getPermissionGroup = (permission) => {
+    if (permission.startsWith("view_")) return "Visualização";
+    if (permission.startsWith("create_") || permission.startsWith("edit_") || permission.startsWith("delete_")) return "Ações";
+    if (permission.startsWith("manage_")) return "Gerenciamento";
+    return "Outros";
+  };
+
+  // Agrupar permissões por categoria
+  const groupedPermissions = Object.values(PERMISSIONS).reduce((acc, permission) => {
+    const group = getPermissionGroup(permission);
+    if (!acc[group]) acc[group] = [];
+    acc[group].push(permission);
+    return acc;
+  }, {});
 
   if (!isAdmin) {
     return (
@@ -172,9 +183,8 @@ const UsersManagement = () => {
             </div>
           ) : (
             users.map((user) => {
-              const RoleIcon = getRoleIcon(user.role || USER_ROLES.READ_ONLY);
-              const roleColor = getRoleColor(user.role || USER_ROLES.READ_ONLY);
-              const userPermissions = user.permissions || [];
+              const userSelectedPermissions = selectedPermissions[user.id] || [];
+              const hasChanges = JSON.stringify(userSelectedPermissions.sort()) !== JSON.stringify((user.permissions || []).sort());
               
               return (
                 <div
@@ -183,16 +193,16 @@ const UsersManagement = () => {
                 >
                   <div className="p-6">
                     {/* User Header */}
-                    <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-start justify-between mb-6">
                       <div className="flex items-center gap-4 flex-1">
-                        <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${roleColor} flex items-center justify-center shadow-lg`}>
-                          <RoleIcon className="w-7 h-7 text-white" />
+                        <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg">
+                          <Users className="w-7 h-7 text-white" />
                         </div>
                         <div className="flex-1">
                           <h3 className="text-lg font-semibold text-gray-800 mb-1">
-                            {user.email || "Usuário sem email"}
+                            {user.email || `Usuário ${user.id.substring(0, 8)}...`}
                           </h3>
-                          <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap mt-2">
                             <span className="text-xs font-medium text-gray-500">ID:</span>
                             <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono text-gray-700">
                               {user.id}
@@ -213,80 +223,81 @@ const UsersManagement = () => {
                       </div>
                     </div>
 
-                    {/* Role Selector */}
-                    <div className="mb-4">
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Tipo de Acesso
+                    {/* Permissions Checkboxes */}
+                    <div className="mb-6">
+                      <label className="block text-sm font-semibold text-gray-700 mb-4">
+                        Permissões de Acesso
                       </label>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                        {Object.values(USER_ROLES).map((role) => {
-                          const Icon = getRoleIcon(role);
-                          const color = getRoleColor(role);
-                          const isSelected = (user.role || USER_ROLES.READ_ONLY) === role;
-                          
-                          return (
-                            <button
-                              key={role}
-                              onClick={() => handleRoleChange(user.id, role)}
-                              disabled={saving[user.id]}
-                              className={`
-                                relative p-4 rounded-xl border-2 transition-all duration-200
-                                ${isSelected
-                                  ? `border-blue-500 bg-blue-50 shadow-md`
-                                  : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
-                                }
-                                ${saving[user.id] ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
-                              `}
-                            >
-                              <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${color} flex items-center justify-center mb-2 mx-auto`}>
-                                <Icon className="w-5 h-5 text-white" />
-                              </div>
-                              <p className="text-sm font-semibold text-gray-800 mb-1">
-                                {getRoleLabel(role)}
-                              </p>
-                              {isSelected && (
-                                <div className="absolute top-2 right-2">
-                                  <div className="w-5 h-5 rounded-full bg-blue-500 flex items-center justify-center">
-                                    <Check className="w-3 h-3 text-white" />
-                                  </div>
-                                </div>
-                              )}
-                            </button>
-                          );
-                        })}
+                      
+                      <div className="space-y-6">
+                        {Object.entries(groupedPermissions).map(([groupName, permissions]) => (
+                          <div key={groupName} className="border border-gray-200 rounded-lg p-4">
+                            <h4 className="text-sm font-bold text-gray-700 mb-3 pb-2 border-b border-gray-200">
+                              {groupName}
+                            </h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                              {permissions.map((permission) => {
+                                const isChecked = userSelectedPermissions.includes(permission);
+                                return (
+                                  <label
+                                    key={permission}
+                                    className="flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all hover:bg-gray-50"
+                                    style={{
+                                      borderColor: isChecked ? "#3b82f6" : "#e5e7eb",
+                                      backgroundColor: isChecked ? "#eff6ff" : "transparent",
+                                    }}
+                                  >
+                                    <div className="flex-shrink-0">
+                                      {isChecked ? (
+                                        <CheckSquare className="w-5 h-5 text-blue-600" />
+                                      ) : (
+                                        <Square className="w-5 h-5 text-gray-400" />
+                                      )}
+                                    </div>
+                                    <span className="text-sm font-medium text-gray-700 flex-1">
+                                      {getPermissionLabel(permission)}
+                                    </span>
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => handlePermissionToggle(user.id, permission)}
+                                      className="sr-only"
+                                    />
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
-                    {/* Permissions List */}
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">
-                        Permissões Ativas ({userPermissions.length})
-                      </label>
-                      <div className="flex flex-wrap gap-2">
-                        {userPermissions.length > 0 ? (
-                          userPermissions.map((permission) => (
-                            <span
-                              key={permission}
-                              className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium"
-                            >
-                              {getPermissionLabel(permission)}
-                            </span>
-                          ))
-                        ) : (
-                          <span className="text-sm text-gray-500">Nenhuma permissão ativa</span>
+                    {/* Save Button */}
+                    <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+                      <div className="text-sm text-gray-600">
+                        <span className="font-semibold">
+                          {userSelectedPermissions.length} permissão(ões) selecionada(s)
+                        </span>
+                        {hasChanges && (
+                          <span className="ml-2 text-orange-600 font-medium">
+                            (alterações não salvas)
+                          </span>
                         )}
                       </div>
-                    </div>
-
-                    {/* Role Description */}
-                    <div className="mt-4 p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-600">
-                        <strong>Descrição:</strong>{" "}
-                        {user.role === USER_ROLES.ADMIN && "Acesso total ao sistema. Pode gerenciar usuários, itens, entradas, saídas e pedidos."}
-                        {user.role === USER_ROLES.READ_ONLY && "Apenas visualização. Pode ver itens, relatórios e histórico, mas não pode fazer alterações."}
-                        {user.role === USER_ROLES.ORDER_ONLY && "Pode visualizar itens e criar pedidos, mas não pode fazer entradas, saídas ou gerenciar pedidos."}
-                        {user.role === USER_ROLES.ENTRY_MANAGER && "Pode criar entradas, visualizar itens, criar pedidos e gerenciar pedidos. Não pode criar saídas ou gerenciar usuários."}
-                      </p>
+                      <button
+                        onClick={() => handleSavePermissions(user.id)}
+                        disabled={saving[user.id] || !hasChanges}
+                        className={`
+                          flex items-center gap-2 px-6 py-2 rounded-lg font-semibold transition-all
+                          ${hasChanges && !saving[user.id]
+                            ? "bg-blue-600 text-white hover:bg-blue-700 shadow-md hover:shadow-lg"
+                            : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                          }
+                        `}
+                      >
+                        <Save className="w-4 h-4" />
+                        {saving[user.id] ? "Salvando..." : "Salvar Permissões"}
+                      </button>
                     </div>
                   </div>
                 </div>

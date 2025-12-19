@@ -15,6 +15,41 @@ import { ADMIN_UID, USER_ROLES, ROLE_PERMISSIONS, PERMISSIONS } from "../config/
 const USERS_COLLECTION = "users";
 
 /**
+ * Atualiza ou cria o email do usuário no Firestore
+ * @param {string} userId - ID do usuário
+ * @param {string} email - Email do usuário
+ * @returns {Promise<void>}
+ */
+export const updateUserEmail = async (userId, email) => {
+  try {
+    if (!userId || !email) return;
+    
+    const userDoc = await getDoc(doc(db, USERS_COLLECTION, userId));
+    if (userDoc.exists()) {
+      // Atualizar email se já existe documento
+      const currentData = userDoc.data();
+      if (currentData.email !== email) {
+        await updateDoc(doc(db, USERS_COLLECTION, userId), {
+          email,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } else {
+      // Criar documento com email se não existe
+      await setDoc(doc(db, USERS_COLLECTION, userId), {
+        email,
+        role: USER_ROLES.READ_ONLY,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+  } catch (error) {
+    console.error("Erro ao atualizar email do usuário:", error);
+    // Não lançar erro, é opcional
+  }
+};
+
+/**
  * Obtém o role de um usuário
  * @param {string} userId - ID do usuário
  * @returns {Promise<string>} Role do usuário ('admin' ou 'user')
@@ -41,7 +76,6 @@ export const getUserRole = async (userId) => {
                 role: USER_ROLES.ADMIN,
                 updatedAt: serverTimestamp(),
               });
-              console.log("✅ Role do administrador inicial atualizado para 'admin' no Firestore.");
             } catch (updateError) {
               console.warn("⚠️ Não foi possível atualizar o documento, mas o usuário é admin inicial:", updateError);
               // Continuar e retornar "admin" mesmo assim
@@ -55,7 +89,6 @@ export const getUserRole = async (userId) => {
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             });
-            console.log("✅ Documento do administrador inicial criado no Firestore.");
           } catch (createError) {
             console.warn("⚠️ Não foi possível criar o documento, mas o usuário é admin inicial:", createError);
             // Continuar e retornar "admin" mesmo assim
@@ -78,6 +111,7 @@ export const getUserRole = async (userId) => {
     }
     
     // Se não existe, criar com role "read_only" (padrão)
+    // Nota: O email será atualizado quando o usuário fizer login
     try {
       await setDoc(doc(db, USERS_COLLECTION, userId), {
         role: USER_ROLES.READ_ONLY,
@@ -141,17 +175,32 @@ export const updateUserRole = async (userId, role, updatedBy) => {
 };
 
 /**
- * Obtém as permissões de um usuário baseado no seu role
+ * Obtém as permissões de um usuário baseado no seu role e permissões customizadas
  * @param {string} userId - ID do usuário
  * @returns {Promise<Array<string>>} Lista de permissões
  */
 export const getUserPermissions = async (userId) => {
   try {
-    const role = await getUserRole(userId);
+    const userDoc = await getDoc(doc(db, USERS_COLLECTION, userId));
+    if (!userDoc.exists()) {
+      const role = await getUserRole(userId);
+      return ROLE_PERMISSIONS[role] || [];
+    }
+    
+    const userData = userDoc.data();
+    const role = userData.role || USER_ROLES.READ_ONLY;
+    
+    // Se tiver permissões customizadas, usar elas (sobrescreve o role)
+    if (userData.customPermissions && Array.isArray(userData.customPermissions)) {
+      return userData.customPermissions;
+    }
+    
+    // Caso contrário, usar permissões do role
     return ROLE_PERMISSIONS[role] || [];
   } catch (error) {
     console.error("Erro ao buscar permissões do usuário:", error);
-    return [];
+    const role = await getUserRole(userId);
+    return ROLE_PERMISSIONS[role] || [];
   }
 };
 
@@ -241,6 +290,7 @@ export const getUserInfo = async (userId) => {
     }
     
     const userData = userDoc.data();
+    // Buscar permissões (considera customPermissions se existir)
     const permissions = await getUserPermissions(userId);
     
     return {
@@ -277,7 +327,6 @@ export const initializeAdmin = async (adminUserId = ADMIN_UID) => {
     if (userDoc.exists()) {
       const currentRole = userDoc.data().role;
       if (currentRole === USER_ROLES.ADMIN) {
-        console.log("Administrador já está configurado corretamente.");
         return;
       }
       
@@ -287,7 +336,6 @@ export const initializeAdmin = async (adminUserId = ADMIN_UID) => {
         role: USER_ROLES.ADMIN,
         updatedAt: serverTimestamp(),
       });
-      console.log("Role do administrador atualizado para 'admin'.");
     } else {
       // Criar documento do admin
       // As regras do Firestore permitem que o admin inicial crie seu documento como "admin"
@@ -296,7 +344,6 @@ export const initializeAdmin = async (adminUserId = ADMIN_UID) => {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
-      console.log("Administrador inicial criado com sucesso.");
     }
   } catch (error) {
     console.error("Erro ao inicializar administrador:", error);

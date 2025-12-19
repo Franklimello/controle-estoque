@@ -146,10 +146,13 @@ const OrdersManagement = () => {
     for (const { index, quantidade } of selectedItems) {
       const item = order.itens[index];
       if (!item.isCustom && item.itemId) {
-        const itemData = items.find((it) => it.id === item.itemId);
-        if (itemData && quantidade > (itemData.quantidade || 0)) {
+        // 🔧 CORREÇÃO: Buscar item original do banco para ter quantidade total correta
+        const { getItemById } = await import("../services/items");
+        const originalItem = await getItemById(item.itemId);
+        
+        if (originalItem && quantidade > (originalItem.quantidade || 0)) {
           showError(
-            `Quantidade solicitada (${quantidade}) maior que o estoque disponível (${itemData.quantidade || 0}) para ${item.nome || item.nomeProduto}`
+            `Quantidade solicitada (${quantidade}) maior que o estoque disponível (${originalItem.quantidade || 0}) para ${item.nome || item.nomeProduto}`
           );
           return;
         }
@@ -410,12 +413,24 @@ const OrdersManagement = () => {
                       <h4 className="font-bold text-gray-800 mb-3">Itens do Pedido:</h4>
                       <div className="space-y-2 mb-4">
                         {order.itens.map((item, index) => {
-                          const itemData = items.find((it) => it.id === item.itemId);
+                          // 🔧 CORREÇÃO: Buscar item considerando originalItemId se expandido
+                          const itemData = items.find((it) => {
+                            const originalId = it.originalItemId || it.id;
+                            return originalId === item.itemId || it.id === item.itemId;
+                          });
+                          
                           const itemState = itemsToFinalize[order.id]?.[index] || {
                             selected: !item.isCustom,
                             quantidade: item.quantidade,
                           };
-                          const estoqueAtual = !item.isCustom && itemData ? (itemData.quantidade || 0) : 0;
+                          
+                          // 🔧 CORREÇÃO: Se item expandido, usar quantidadeTotal, senão usar quantidade
+                          const estoqueAtual = !item.isCustom && itemData 
+                            ? (itemData.isExpanded && itemData.quantidadeTotal 
+                                ? itemData.quantidadeTotal 
+                                : (itemData.quantidade || 0))
+                            : 0;
+                          
                           const quantidadeEditada = itemState.quantidade;
                           const estoqueInsuficiente =
                             !item.isCustom && itemData && quantidadeEditada > estoqueAtual;
@@ -467,6 +482,11 @@ const OrdersManagement = () => {
                                       <div>
                                         <span className="font-semibold">Estoque disponível:</span>{" "}
                                         {estoqueAtual} {itemData.unidade || "UN"}
+                                        {itemData.isExpanded && itemData.quantidadeTotal && (
+                                          <span className="text-xs text-gray-500 ml-1">
+                                            (total em múltiplos lotes)
+                                          </span>
+                                        )}
                                       </div>
                                     )}
                                     {isEditable && itemState.selected && !item.isCustom && (
@@ -478,7 +498,6 @@ const OrdersManagement = () => {
                                           <input
                                             type="number"
                                             min="0"
-                                            max={estoqueAtual}
                                             value={quantidadeEditada}
                                             onChange={(e) =>
                                               handleUpdateQuantityForFinalize(

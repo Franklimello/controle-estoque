@@ -17,6 +17,92 @@ import { logAudit } from "./audit";
 import { ESTOQUE_BAIXO_LIMITE } from "../config/constants";
 import { getExpiringBatches, getBatchesByItem } from "./batches";
 
+/**
+ * Valida a consistência entre a quantidade total do item e a soma dos lotes
+ * @param {string} itemId - ID do item
+ * @returns {Promise<Object>} { isValid: boolean, itemQuantity: number, batchesSum: number, difference: number, message: string }
+ */
+export const validateStockConsistency = async (itemId) => {
+  try {
+    const item = await getItemById(itemId);
+    if (!item) {
+      return {
+        isValid: false,
+        itemQuantity: 0,
+        batchesSum: 0,
+        difference: 0,
+        message: "Item não encontrado",
+      };
+    }
+
+    const batches = await getBatchesByItem(itemId);
+    const batchesSum = batches.reduce((sum, batch) => sum + (parseInt(batch.quantidade || 0, 10)), 0);
+    const itemQuantity = parseInt(item.quantidade || 0, 10);
+    const difference = itemQuantity - batchesSum;
+
+    const isValid = Math.abs(difference) <= 0.01; // Tolerância para erros de arredondamento
+
+    return {
+      isValid,
+      itemQuantity,
+      batchesSum,
+      difference,
+      message: isValid
+        ? "Estoque consistente"
+        : `Inconsistência detectada: Item tem ${itemQuantity}, mas lotes somam ${batchesSum} (diferença: ${difference})`,
+    };
+  } catch (error) {
+    console.error("Erro ao validar consistência de estoque:", error);
+    return {
+      isValid: false,
+      itemQuantity: 0,
+      batchesSum: 0,
+      difference: 0,
+      message: `Erro ao validar: ${error.message}`,
+    };
+  }
+};
+
+/**
+ * Sincroniza a quantidade total do item com a soma dos lotes
+ * @param {string} itemId - ID do item
+ * @param {string} userId - ID do usuário
+ * @returns {Promise<Object>} { success: boolean, oldQuantity: number, newQuantity: number, message: string }
+ */
+export const syncItemQuantityFromBatches = async (itemId, userId) => {
+  try {
+    const batches = await getBatchesByItem(itemId);
+    const batchesSum = batches.reduce((sum, batch) => sum + (parseInt(batch.quantidade || 0, 10)), 0);
+    
+    const item = await getItemById(itemId);
+    if (!item) {
+      throw new Error("Item não encontrado");
+    }
+
+    const oldQuantity = parseInt(item.quantidade || 0, 10);
+    
+    if (oldQuantity !== batchesSum) {
+      await updateItem(itemId, { quantidade: batchesSum }, userId);
+      return {
+        success: true,
+        oldQuantity,
+        newQuantity: batchesSum,
+        message: `Quantidade sincronizada: ${oldQuantity} → ${batchesSum}`,
+      };
+    }
+
+    return {
+      success: true,
+      oldQuantity,
+      newQuantity: batchesSum,
+      message: "Quantidade já estava sincronizada",
+    };
+  } catch (error) {
+    console.error("Erro ao sincronizar quantidade:", error);
+    throw error;
+  }
+};
+
 const ITEMS_COLLECTION = "items";
 
 /**
@@ -42,7 +128,8 @@ export const addItem = async (itemData, userId) => {
 
 /**
  * Busca todos os itens
- * @returns {Promise<Array>} Lista de itens
+ * Expande itens com múltiplos lotes (vencimentos diferentes) em linhas separadas
+ * @returns {Promise<Array>} Lista de itens (expandida por lote quando necessário)
  */
 export const getItems = async () => {
   try {
@@ -51,10 +138,57 @@ export const getItems = async () => {
       orderBy("createdAt", "desc")
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map((doc) => ({
+    const items = querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
+
+    // Expandir itens que têm múltiplos lotes com vencimentos diferentes
+    // ⚡ OTIMIZAÇÃO: Buscar lotes em paralelo para melhor performance
+    const itemsWithBatches = await Promise.all(
+      items.map(async (item) => {
+        const batches = await getBatchesByItem(item.id);
+        return { item, batches };
+      })
+    );
+
+    const expandedItems = [];
+    
+    for (const { item, batches } of itemsWithBatches) {
+      if (batches.length === 0) {
+        // Se não há lotes, adicionar o item como está
+        expandedItems.push({
+          ...item,
+          batchId: null,
+          isExpanded: false,
+        });
+      } else if (batches.length === 1) {
+        // Se há apenas um lote, usar a validade desse lote
+        expandedItems.push({
+          ...item,
+          quantidade: batches[0].quantidade || item.quantidade || 0,
+          validade: batches[0].validade === "sem-validade" ? null : (batches[0].validade || item.validade || null),
+          batchId: batches[0].id,
+          isExpanded: false,
+        });
+      } else {
+        // Se há múltiplos lotes, criar uma linha para cada lote
+        batches.forEach((batch) => {
+          expandedItems.push({
+            ...item,
+            id: `${item.id}_${batch.id}`, // ID único para cada linha
+            originalItemId: item.id, // Guardar ID original do item
+            quantidade: batch.quantidade || 0,
+            validade: batch.validade === "sem-validade" ? null : (batch.validade || null),
+            batchId: batch.id,
+            isExpanded: true,
+            quantidadeTotal: item.quantidade || 0, // Quantidade total do item
+          });
+        });
+      }
+    }
+
+    return expandedItems;
   } catch (error) {
     console.error("Erro ao buscar itens:", error);
     throw error;

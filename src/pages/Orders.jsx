@@ -64,13 +64,20 @@ const Orders = () => {
       .map(([itemId, data]) => {
         const item = items.find((it) => it.id === itemId);
         if (!item) return null;
+        
+        // 🔧 CORREÇÃO: Se o item é expandido, usar originalItemId e quantidadeTotal
+        const finalItemId = item.originalItemId || item.id;
+        const estoqueAtual = item.isExpanded && item.quantidadeTotal 
+          ? item.quantidadeTotal 
+          : (item.quantidade || 0);
+        
         return {
-          itemId: item.id,
+          itemId: finalItemId, // Usar ID original se expandido
           codigo: item.codigo || "",
           nome: item.nome,
           quantidade: data.quantidade,
           unidade: item.unidade || "UN",
-          estoqueAtual: item.quantidade || 0,
+          estoqueAtual: estoqueAtual,
         };
       })
       .filter(Boolean);
@@ -230,8 +237,15 @@ const Orders = () => {
               ) : (
                 <div className="divide-y">
                   {filteredItems.map((item) => {
-                    const isSelected = selectedItems[item.id];
-                    const estoqueAtual = item.quantidade || 0;
+                    // 🔧 CORREÇÃO: Usar originalItemId se item expandido para seleção
+                    const itemIdToUse = item.originalItemId || item.id;
+                    const isSelected = selectedItems[itemIdToUse];
+                    
+                    // 🔧 CORREÇÃO: Se item expandido, usar quantidadeTotal, senão usar quantidade
+                    const estoqueAtual = item.isExpanded && item.quantidadeTotal 
+                      ? item.quantidadeTotal 
+                      : (item.quantidade || 0);
+                    
                     const quantidadeSolicitada = isSelected?.quantidade || 0;
                     const estoqueInsuficiente = quantidadeSolicitada > estoqueAtual;
 
@@ -247,7 +261,7 @@ const Orders = () => {
                             <input
                               type="checkbox"
                               checked={!!isSelected}
-                              onChange={() => handleToggleItem(item.id)}
+                              onChange={() => handleToggleItem(itemIdToUse)}
                               className="w-4 h-4 lg:w-5 lg:h-5 text-blue-600 rounded focus:ring-blue-500 cursor-pointer flex-shrink-0"
                             />
                             <div className="flex-1 min-w-0">
@@ -258,6 +272,11 @@ const Orders = () => {
                                 )}
                                 <span>
                                   Estoque: {estoqueAtual} {item.unidade || "UN"}
+                                  {item.isExpanded && item.quantidadeTotal && (
+                                    <span className="text-xs text-gray-400 ml-1">
+                                      (total em múltiplos lotes)
+                                    </span>
+                                  )}
                                 </span>
                                 {item.categoria && (
                                   <span>Categoria: {item.categoria}</span>
@@ -279,7 +298,7 @@ const Orders = () => {
                                 value={quantidadeSolicitada}
                                 onChange={(e) =>
                                   handleUpdateSelectedQuantity(
-                                    item.id,
+                                    itemIdToUse,
                                     parseInt(e.target.value) || 1
                                   )
                                 }

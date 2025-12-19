@@ -21,7 +21,7 @@ import {
 import logoPrefeitura from "../assets/prefeiturajpg.png";
 
 const Navbar = () => {
-  const { currentUser, isAdmin, logout, hasPermission } = useAuth();
+  const { currentUser, isAdmin, logout, hasPermission, userPermissions } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -131,7 +131,7 @@ const Navbar = () => {
                   <span className="text-sm font-medium text-slate-200 max-w-xs truncate">
                     {currentUser.email}
                   </span>
-                  {!isAdmin && (
+                  {!isAdmin && !hasPermission(PERMISSIONS.CREATE_ENTRY) && !hasPermission(PERMISSIONS.CREATE_EXIT) && !hasPermission(PERMISSIONS.CREATE_ITEMS) && !hasPermission(PERMISSIONS.EDIT_ITEMS) && !hasPermission(PERMISSIONS.CREATE_ORDER) && (
                     <span className="text-[11px] font-semibold text-yellow-200 bg-yellow-600/20 border border-yellow-500/40 px-2 py-0.5 rounded">
                       Somente leitura
                     </span>

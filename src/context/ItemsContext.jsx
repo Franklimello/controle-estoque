@@ -80,6 +80,17 @@ export const ItemsProvider = ({ children }) => {
 
   useEffect(() => {
     loadItems();
+    
+    // 🔄 Listener para invalidar cache automaticamente após operações
+    const handleInvalidateCache = () => {
+      loadItems(true);
+    };
+    
+    window.addEventListener('invalidateItemsCache', handleInvalidateCache);
+    
+    return () => {
+      window.removeEventListener('invalidateItemsCache', handleInvalidateCache);
+    };
   }, []);
 
   const refreshItems = () => loadItems(true);

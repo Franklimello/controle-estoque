@@ -45,7 +45,14 @@ const ItemCard = ({ item, onClick, clickable = true, badge, badgeColor }) => {
             />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-800">{item.nome}</h3>
+            <h3 className="text-lg font-semibold text-gray-800">
+              {item.nome}
+              {item.isExpanded && (
+                <span className="ml-2 text-xs text-gray-500 italic font-normal">
+                  (Lote)
+                </span>
+              )}
+            </h3>
             <p className="text-sm text-gray-500">
               Código: {item.codigo || "Sem código"}
             </p>
@@ -98,13 +105,20 @@ const ItemCard = ({ item, onClick, clickable = true, badge, badgeColor }) => {
         </div>
         <div className="flex justify-between items-center pt-2 border-t">
           <span className="text-gray-600 font-medium">Estoque:</span>
-          <span
-            className={`text-xl font-bold ${
-              isLowStock ? "text-red-600" : "text-green-600"
-            }`}
-          >
-            {item.quantidade || 0} {item.unidade || "UN"}
-          </span>
+          <div className="text-right">
+            <span
+              className={`text-xl font-bold ${
+                isLowStock ? "text-red-600" : "text-green-600"
+              }`}
+            >
+              {item.quantidade || 0} {item.unidade || "UN"}
+            </span>
+            {item.isExpanded && item.quantidadeTotal && (
+              <p className="text-xs text-gray-500 mt-1">
+                Total: {item.quantidadeTotal} {item.unidade || "UN"}
+              </p>
+            )}
+          </div>
         </div>
         {item.validade && (
           <div

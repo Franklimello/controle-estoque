@@ -26,6 +26,7 @@ import Reports from "./pages/Reports";
 import Orders from "./pages/Orders";
 import OrdersManagement from "./pages/OrdersManagement";
 import UsersManagement from "./pages/UsersManagement";
+import StockAdjustment from "./pages/StockAdjustment";
 import { PERMISSIONS } from "./config/constants";
 
 // Componente para proteger rotas (apenas autenticação)
@@ -155,6 +156,14 @@ const AppContent = () => {
               element={
                 <ProtectedRoute permission={PERMISSIONS.MANAGE_USERS}>
                   <UsersManagement />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/stock-adjustment"
+              element={
+                <ProtectedRoute permission={PERMISSIONS.ADJUST_STOCK}>
+                  <StockAdjustment />
                 </ProtectedRoute>
               }
             />
