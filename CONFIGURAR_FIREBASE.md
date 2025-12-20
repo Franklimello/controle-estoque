@@ -129,3 +129,5 @@ Ao fazer deploy (ex: Firebase Hosting, Vercel, Netlify), configure as variáveis
 
 
 
+
+

@@ -152,6 +152,42 @@ export const getItems = async () => {
       })
     );
 
+    // Função auxiliar para extrair validade de um batch
+    const extractValidityFromBatch = (batch) => {
+      if (!batch) return null;
+      
+      // Se for "sem-validade", retornar null (será exibido como "-" ou "Sem validade")
+      if (batch.validade === "sem-validade" || !batch.validade) {
+        return null;
+      }
+      
+      // Priorizar validadeDate (Timestamp do Firestore) e converter para string ISO
+      if (batch.validadeDate) {
+        try {
+          const date = batch.validadeDate.toDate ? batch.validadeDate.toDate() : batch.validadeDate;
+          if (date instanceof Date && !Number.isNaN(date.getTime())) {
+            const year = date.getFullYear();
+            const mm = String(date.getMonth() + 1).padStart(2, "0");
+            const dd = String(date.getDate()).padStart(2, "0");
+            return `${year}-${mm}-${dd}`;
+          }
+        } catch (error) {
+          console.error("Erro ao converter validadeDate:", error, batch);
+        }
+      }
+      
+      // Se não tiver validadeDate, usar validade (string ISO)
+      if (batch.validade && batch.validade !== "sem-validade") {
+        // Validar se é uma string ISO válida (YYYY-MM-DD)
+        if (typeof batch.validade === "string" && /^\d{4}-\d{2}-\d{2}$/.test(batch.validade)) {
+          return batch.validade;
+        }
+      }
+      
+      // Se chegou aqui, não há validade válida
+      return null;
+    };
+
     const expandedItems = [];
     
     for (const { item, batches } of itemsWithBatches) {
@@ -164,22 +200,24 @@ export const getItems = async () => {
         });
       } else if (batches.length === 1) {
         // Se há apenas um lote, usar a validade desse lote
+        const batchValidade = extractValidityFromBatch(batches[0]);
         expandedItems.push({
           ...item,
           quantidade: batches[0].quantidade || item.quantidade || 0,
-          validade: batches[0].validade === "sem-validade" ? null : (batches[0].validade || item.validade || null),
+          validade: batchValidade || item.validade || null,
           batchId: batches[0].id,
           isExpanded: false,
         });
       } else {
         // Se há múltiplos lotes, criar uma linha para cada lote
         batches.forEach((batch) => {
+          const batchValidade = extractValidityFromBatch(batch);
           expandedItems.push({
             ...item,
             id: `${item.id}_${batch.id}`, // ID único para cada linha
             originalItemId: item.id, // Guardar ID original do item
             quantidade: batch.quantidade || 0,
-            validade: batch.validade === "sem-validade" ? null : (batch.validade || null),
+            validade: batchValidade,
             batchId: batch.id,
             isExpanded: true,
             quantidadeTotal: item.quantidade || 0, // Quantidade total do item

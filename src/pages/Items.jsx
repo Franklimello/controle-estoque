@@ -476,13 +476,13 @@ const Items = () => {
 
                 if (lowStock && nearExpiry) {
                   badge = `Baixo estoque | Vence em ${diffDays} dias`;
-                  badgeColor = "bg-orange-500 text-white";
+                  badgeColor = "bg-purple-600 text-white";
                 } else if (lowStock) {
                   badge = "Baixo estoque";
-                  badgeColor = "bg-red-600 text-white";
+                  badgeColor = "bg-orange-500 text-white";
                 } else if (nearExpiry) {
                   badge = `Vence em ${diffDays} dias`;
-                  badgeColor = "bg-yellow-500 text-white";
+                  badgeColor = "bg-red-600 text-white";
                 }
 
                 // Usar originalItemId se o item foi expandido, senão usar o id normal
@@ -509,24 +509,31 @@ const Items = () => {
             {/* 🖥️ DESKTOP (TABELA) */}
             <div className="hidden lg:block bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
+                <table className="w-full text-left text-sm table-auto">
                   <thead className="bg-gradient-to-r from-blue-50 to-gray-50 text-gray-700 uppercase">
                     <tr>
-                      <th className="px-6 py-4 min-w-[200px] font-semibold">Nome</th>
-                      <th className="px-6 py-4 min-w-[150px] font-semibold">Código</th>
-                      <th className="px-6 py-4 min-w-[150px] font-semibold">Categoria</th>
-                      <th className="px-6 py-4 min-w-[150px] font-semibold">Local</th>
-                      <th className="px-6 py-4 min-w-[150px] font-semibold">Fornecedor</th>
-                      <th className="px-6 py-4 min-w-[120px] font-semibold text-center">Quantidade</th>
-                      <th className="px-6 py-4 min-w-[120px] font-semibold">Validade</th>
-                      <th className="px-6 py-4 min-w-[150px] font-semibold">Status</th>
+                      <th className="px-3 py-2 min-w-[180px] font-semibold text-xs">Nome</th>
+                      <th className="px-3 py-2 min-w-[120px] font-semibold text-xs">Código</th>
+                      <th className="px-3 py-2 min-w-[130px] font-semibold text-xs">Categoria</th>
+                      <th className="px-3 py-2 min-w-[120px] font-semibold text-xs">Local</th>
+                      <th className="px-3 py-2 min-w-[120px] font-semibold text-xs">Fornecedor</th>
+                      <th className="px-3 py-2 min-w-[100px] font-semibold text-xs text-center">Quantidade</th>
+                      <th className="px-3 py-2 min-w-[100px] font-semibold text-xs">Validade</th>
+                      <th className="px-3 py-2 min-w-[140px] font-semibold text-xs">Status</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {currentItems.map((item) => {
+                    {currentItems.map((item, index) => {
                       // 📊 AGRUPAMENTO VISUAL: Estilo diferente para cabeçalho de grupo e lotes
                       const isGroupHeader = item.isGroupHeader;
                       const isGroupChild = item.isGroupChild;
+                      // Verificar se é o primeiro lote após o cabeçalho
+                      const isFirstChild = isGroupChild && index > 0 && currentItems[index - 1]?.isGroupHeader;
+                      // Verificar se é o último lote do grupo
+                      const isLastChild = isGroupChild && (
+                        index === currentItems.length - 1 || 
+                        !currentItems[index + 1]?.isGroupChild
+                      );
                       
                       // Para cabeçalhos de grupo, não calcular informações de validade
                       const expiryInfo = isGroupHeader ? { isExpired: false, daysUntilExpiry: null } : checkExpiringDate(item.validade);
@@ -548,13 +555,13 @@ const Items = () => {
                         statusColor = "bg-blue-500 text-white";
                       } else if (lowStock && nearExpiry) {
                         statusBadge = `Baixo estoque | Vence em ${diffDays} dias`;
-                        statusColor = "bg-orange-500 text-white";
+                        statusColor = "bg-purple-600 text-white";
                       } else if (lowStock) {
                         statusBadge = "Baixo estoque";
-                        statusColor = "bg-red-600 text-white";
+                        statusColor = "bg-orange-500 text-white";
                       } else if (nearExpiry) {
                         statusBadge = `Vence em ${diffDays} dias`;
-                        statusColor = "bg-yellow-500 text-white";
+                        statusColor = "bg-red-600 text-white";
                       } else if (isExpired) {
                         statusBadge = "Vencido";
                         statusColor = "bg-red-700 text-white";
@@ -593,68 +600,86 @@ const Items = () => {
                           key={item.id}
                           className={`transition-all duration-200 ${
                             isGroupHeader
-                              ? "bg-blue-50 border-l-4 border-blue-500 font-semibold"
+                              ? "bg-gradient-to-r from-blue-100 to-blue-50 border-l-4 border-r-4 border-t-4 border-b-0 border-green-600 font-semibold shadow-md rounded-t-lg"
                               : isGroupChild
-                              ? "bg-gray-50 border-l-4 border-gray-300 pl-8"
+                              ? `bg-gray-50/80 border-l-4 border-r-4 border-green-400 pl-8 relative ${isFirstChild ? 'border-t-0' : ''} ${isLastChild ? 'border-b-4 border-green-400 rounded-b-lg' : ''}`
                               : isAdmin 
                               ? "cursor-pointer hover:bg-blue-50 hover:shadow-sm" 
                               : "cursor-default hover:bg-gray-50"
                           }`}
                           onClick={() => !isGroupHeader && isAdmin && navigate(`/edit-item/${itemIdToEdit}`)}
                         >
-                          <td className="px-6 py-4 font-medium text-gray-900">
+                          <td className="px-3 py-2 font-medium text-gray-900">
                             {isGroupHeader ? (
                               <div className="flex items-center gap-2">
-                                <span className="text-blue-700">{item.nome}</span>
-                                <span className="text-xs bg-blue-200 text-blue-800 px-2 py-1 rounded-full">
-                                  {item.lotesCount} lote(s) - Total: {item.quantidadeTotal} {item.unidade || "UN"}
-                                </span>
+                                <div className="flex items-center justify-center w-6 h-6 bg-blue-600 text-white rounded-full text-xs font-bold flex-shrink-0">
+                                  {item.lotesCount}
+                                </div>
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-blue-900 font-bold text-sm truncate">{item.nome}</span>
+                                  <span className="text-xs text-blue-700 font-medium">
+                                    {item.lotesCount} lote(s) • {item.quantidadeTotal} {item.unidade || "UN"}
+                                  </span>
+                                </div>
                               </div>
                             ) : (
                               <>
-                                {isGroupChild && <span className="text-gray-400 mr-2">└─</span>}
-                                {item.nome}
-                                {item.isExpanded && !isGroupHeader && (
-                                  <span className="ml-2 text-xs text-gray-500 italic">
-                                    (Lote)
+                                <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center flex-shrink-0">
+                                    <div className="w-4 h-4 flex items-center justify-center">
+                                      <div className="w-0.5 h-full bg-blue-400"></div>
+                                    </div>
+                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500 -ml-1"></div>
+                                  </div>
+                                  <span className="text-gray-800 text-sm truncate">{item.nome}</span>
+                                  <span className="ml-1 text-xs bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">
+                                    Lote
                                   </span>
-                                )}
+                                </div>
                               </>
                             )}
                           </td>
-                          <td className="px-6 py-4 text-gray-700">{item.codigo || "-"}</td>
-                          <td className="px-6 py-4 text-gray-600">
+                          <td className="px-3 py-2 text-gray-700 text-sm">{item.codigo || "-"}</td>
+                          <td className="px-3 py-2 text-gray-600 text-sm">
                             {item.categoria || "-"}
                           </td>
-                          <td className="px-6 py-4 text-gray-600">{item.local || "-"}</td>
-                          <td className="px-6 py-4 text-gray-600">
+                          <td className="px-3 py-2 text-gray-600 text-sm">{item.local || "-"}</td>
+                          <td className="px-3 py-2 text-gray-600 text-sm">
                             {item.fornecedor || "-"}
                           </td>
-                          <td className="px-6 py-4 text-center">
+                          <td className="px-3 py-2 text-center">
                             {isGroupHeader ? (
-                              <span className="font-semibold text-blue-700">
-                                {item.quantidadeTotal || item.quantidade || 0} {item.unidade || "UN"}
-                              </span>
+                              <div className="flex flex-col items-center">
+                                <span className="font-bold text-blue-800 text-sm">
+                                  {item.quantidadeTotal || item.quantidade || 0}
+                                </span>
+                                <span className="text-xs text-blue-600 font-medium">
+                                  {item.unidade || "UN"}
+                                </span>
+                              </div>
                             ) : (
                               <span
-                                className={`font-semibold ${
-                                  lowStock ? "text-red-600" : "text-green-600"
+                                className={`font-semibold text-sm ${
+                                  lowStock ? "text-orange-600" : "text-green-600"
                                 }`}
                               >
                                 {item.quantidade || 0} {item.unidade || "UN"}
                               </span>
                             )}
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-3 py-2">
                             {isGroupHeader ? (
-                              <span className="text-gray-500 italic text-sm">Varia por lote</span>
+                              <div className="flex items-center gap-1">
+                                <span className="text-blue-600 font-semibold text-xs">📦</span>
+                                <span className="text-gray-600 italic text-xs">Varia</span>
+                              </div>
                             ) : (
                               <span
-                                className={`font-medium ${
+                                className={`font-medium text-sm ${
                                   isExpired
                                     ? "text-red-600"
                                     : nearExpiry
-                                    ? "text-orange-600"
+                                    ? "text-red-600"
                                     : "text-gray-700"
                                 }`}
                               >
@@ -662,12 +687,18 @@ const Items = () => {
                               </span>
                             )}
                           </td>
-                          <td className="px-6 py-4">
-                            <span
-                              className={`inline-block px-3 py-1 text-xs font-semibold rounded-full ${statusColor}`}
-                            >
-                              {statusBadge}
-                            </span>
+                          <td className="px-3 py-2">
+                            {isGroupHeader ? (
+                              <span className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-bold rounded-full bg-blue-600 text-white shadow-md whitespace-nowrap border-2 border-blue-700">
+                                AGRUPADO
+                              </span>
+                            ) : (
+                              <span
+                                className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${statusColor}`}
+                              >
+                                {statusBadge}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       );

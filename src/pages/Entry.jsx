@@ -60,13 +60,28 @@ const Entry = () => {
         const item = await getItemByCodigo(codigo);
         if (item) {
           setItemFound(item);
+          // Normalizar validade do item: converter Timestamp para string ISO se necessário
+          let validadeItem = "";
+          if (item.validade) {
+            if (item.validade.toDate) {
+              // Se for Timestamp do Firestore, converter para string ISO
+              const date = item.validade.toDate();
+              const year = date.getFullYear();
+              const mm = String(date.getMonth() + 1).padStart(2, "0");
+              const dd = String(date.getDate()).padStart(2, "0");
+              validadeItem = `${year}-${mm}-${dd}`;
+            } else if (typeof item.validade === "string") {
+              // Se já for string, usar diretamente
+              validadeItem = item.validade;
+            }
+          }
           setFormData((prev) => ({
             ...prev,
             nome: item.nome || "",
             categoria: item.categoria || "",
             unidade: item.unidade || "UN",
             local: item.local || "",
-            validade: item.validade || "",
+            validade: validadeItem,
           }));
         } else {
           setItemFound(null);
@@ -77,12 +92,28 @@ const Entry = () => {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: type === "checkbox" ? checked : value,
+    
+    if (type === "checkbox" && name === "semValidade") {
       // Se marcar "sem validade", limpar o campo de validade
-      ...(name === "semValidade" && checked ? { validade: "" } : {}),
-    }));
+      setFormData((prev) => ({
+        ...prev,
+        semValidade: checked,
+        validade: checked ? "" : prev.validade,
+      }));
+    } else if (name === "validade" && value) {
+      // Se preencher validade, desmarcar "sem validade" automaticamente
+      setFormData((prev) => ({
+        ...prev,
+        validade: value,
+        semValidade: false,
+      }));
+    } else {
+      // Outros campos
+      setFormData((prev) => ({
+        ...prev,
+        [name]: type === "checkbox" ? checked : value,
+      }));
+    }
   };
 
   const processEntry = async () => {
@@ -106,12 +137,28 @@ const Entry = () => {
       return false;
     }
 
+    // Normalizar validade: se semValidade for true ou validade estiver vazia, usar null
+    // IMPORTANTE: Se a validade foi preenchida, ela tem prioridade sobre o checkbox
+    const validadeNormalizada = (!formData.validade || formData.validade.trim().length === 0)
+      ? null
+      : formData.validade.trim();
+    
+    // Se validade foi preenchida, garantir que semValidade está false
+    if (validadeNormalizada && formData.semValidade) {
+      console.warn("Atenção: Validade preenchida mas checkbox 'sem validade' estava marcado. Usando validade informada.");
+    }
+
     // ✅ VALIDAÇÃO DE DATA DE VALIDADE: Alertar se a validade está vencida (apenas se não for "sem validade")
-    if (!formData.semValidade && formData.validade && formData.validade.trim().length > 0) {
-      const validadeDate = new Date(formData.validade + "T00:00:00");
+    if (validadeNormalizada) {
+      const validadeDate = new Date(validadeNormalizada + "T00:00:00");
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       validadeDate.setHours(0, 0, 0, 0);
+      
+      if (Number.isNaN(validadeDate.getTime())) {
+        setError("Data de validade inválida. Verifique o formato.");
+        return false;
+      }
       
       if (validadeDate < today) {
         // Armazenar dados da entrada para processar após confirmação
@@ -124,7 +171,7 @@ const Entry = () => {
           categoria: formData.categoria,
           unidade: formData.unidade,
           local: formData.local,
-          validade: formData.semValidade ? null : (formData.validade || null),
+          validade: validadeNormalizada,
         });
         setShowExpiredDateModal(true);
         return false;
@@ -142,7 +189,7 @@ const Entry = () => {
           categoria: formData.categoria,
           unidade: formData.unidade,
           local: formData.local,
-          validade: formData.semValidade ? null : (formData.validade || null),
+          validade: validadeNormalizada,
         },
         currentUser.uid
       );

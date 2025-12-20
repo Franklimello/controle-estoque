@@ -145,7 +145,7 @@ const Sidebar = () => {
   return (
     <aside className={`
       hidden lg:flex flex-col bg-gradient-to-br from-slate-50 via-white to-slate-50 
-      border-r border-slate-200/60 shadow-2xl sticky top-0 h-screen backdrop-blur-xl
+      border-r border-slate-200/60 shadow-2xl fixed top-0 left-0 h-screen backdrop-blur-xl z-40
       transition-all duration-300 ease-in-out
       ${isCollapsed ? 'w-20' : 'w-72'}
     `}>

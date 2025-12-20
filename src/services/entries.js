@@ -83,14 +83,13 @@ export const addEntry = async (entryData, userId) => {
     await incrementStock(item.id, quantidadeInt);
 
     // Incrementar lote por validade (ou sem validade se não informada)
+    // Normalizar validade: garantir que string vazia seja tratada como null
+    const validadeNormalizada = entryData.validade && entryData.validade.trim && entryData.validade.trim().length > 0
+      ? entryData.validade.trim()
+      : null;
+    
     // Se não houver validade, cria lote sem validade
-    if (entryData.validade) {
-      // Adiciona ou incrementa o lote com a validade específica desta entrada
-      await addOrIncrementBatch(item.id, entryData.validade, quantidadeInt);
-    } else {
-      // Adiciona ou incrementa lote sem validade (para produtos que não vencem)
-      await addOrIncrementBatch(item.id, null, quantidadeInt);
-    }
+    await addOrIncrementBatch(item.id, validadeNormalizada, quantidadeInt);
 
     // Atualizar validade do item principal com a validade mais próxima dos lotes
     // Isso garante que a validade seja exibida corretamente na lista de itens

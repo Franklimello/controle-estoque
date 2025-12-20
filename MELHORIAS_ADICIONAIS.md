@@ -201,3 +201,5 @@ Começar pelas melhorias de **Alto Impacto** que têm implementação relativame
 
 Essas três melhorias já teriam um impacto significativo na produtividade e performance do sistema.
 
+
+

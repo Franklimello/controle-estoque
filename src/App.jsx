@@ -58,9 +58,9 @@ const AppContent = () => {
     <div className="min-h-screen bg-gray-50" translate="no">
       <ConnectionIndicator />
       {!isLoginPage && <Navbar />}
-      <div className={isLoginPage ? "" : "flex"}>
+      <div className={isLoginPage ? "" : ""}>
         {!isLoginPage && <Sidebar />}
-        <div className={isLoginPage ? "" : "flex-1"}>
+        <div className={isLoginPage ? "" : "lg:ml-72 lg:pt-20"}>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route

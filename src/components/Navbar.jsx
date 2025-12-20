@@ -82,7 +82,7 @@ const Navbar = () => {
   ];
 
   return (
-    <nav className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-2xl sticky top-0 z-50 border-b border-slate-700/50 backdrop-blur-xl">
+    <nav className="bg-gray-50 text-gray-800 shadow-md fixed top-0 left-0 right-0 lg:left-72 z-50 border-b border-gray-200 transition-all duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-20 gap-4">
           {/* Logo e Título */}
@@ -101,16 +101,16 @@ const Navbar = () => {
               </div>
             </div>
             <div className="hidden md:block">
-              <h1 className="text-base lg:text-lg font-bold tracking-wide text-white whitespace-nowrap">
+              <h1 className="text-base lg:text-lg font-bold tracking-wide text-gray-800 whitespace-nowrap">
                 Prefeitura de Lajinha
               </h1>
               <div className="flex items-center space-x-2">
                 <div className="h-1 w-1 bg-red-500 rounded-full"></div>
-                <h2 className="text-xs lg:text-sm font-medium text-slate-300 whitespace-nowrap">
+                <h2 className="text-xs lg:text-sm font-medium text-gray-600 whitespace-nowrap">
                   Controle de Estoque
                 </h2>
               </div>
-              <p className="text-xs text-slate-400 mt-0.5 whitespace-nowrap">
+              <p className="text-xs text-gray-500 mt-0.5 whitespace-nowrap">
                 Sistema de Almoxarifado
               </p>
             </div>
@@ -120,29 +120,29 @@ const Navbar = () => {
           {currentUser && (
             <>
               <div className="hidden lg:flex items-center space-x-3">
-                <div className="flex items-center space-x-2 bg-slate-800/50 backdrop-blur-sm px-4 py-2.5 rounded-xl border border-slate-700/50 shadow-lg">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-lg">
+                <div className="flex items-center space-x-2 bg-white px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-md">
                     {isAdmin ? (
                       <User className="w-4 h-4 text-white" />
                     ) : (
                       <Lock className="w-4 h-4 text-white" />
                     )}
                   </div>
-                  <span className="text-sm font-medium text-slate-200 max-w-xs truncate">
+                  <span className="text-sm font-medium text-gray-700 max-w-xs truncate">
                     {currentUser.email}
                   </span>
                   {!isAdmin && !hasPermission(PERMISSIONS.CREATE_ENTRY) && !hasPermission(PERMISSIONS.CREATE_EXIT) && !hasPermission(PERMISSIONS.CREATE_ITEMS) && !hasPermission(PERMISSIONS.EDIT_ITEMS) && !hasPermission(PERMISSIONS.CREATE_ORDER) && (
-                    <span className="text-[11px] font-semibold text-yellow-200 bg-yellow-600/20 border border-yellow-500/40 px-2 py-0.5 rounded">
+                    <span className="text-[11px] font-semibold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded">
                       Somente leitura
                     </span>
                   )}
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="group flex items-center space-x-2 px-4 py-2.5 bg-slate-800 hover:bg-red-600 border border-slate-700 hover:border-red-500 rounded-xl transition-all duration-300 shadow-lg hover:shadow-red-500/25"
+                  className="group flex items-center space-x-2 px-4 py-2.5 bg-white hover:bg-red-50 border border-gray-200 hover:border-red-500 rounded-xl transition-all duration-300 shadow-sm hover:shadow-md"
                 >
-                  <LogOut className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" />
-                  <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
+                  <LogOut className="w-4 h-4 text-gray-600 group-hover:text-red-600 transition-colors" />
+                  <span className="text-sm font-medium text-gray-700 group-hover:text-red-600 transition-colors">
                     Sair
                   </span>
                 </button>
@@ -151,7 +151,7 @@ const Navbar = () => {
               {/* Botão Menu Mobile */}
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="lg:hidden p-2.5 rounded-xl hover:bg-slate-700/50 transition-all duration-300"
+                className="lg:hidden p-2.5 rounded-xl hover:bg-gray-100 transition-all duration-300 text-gray-700"
               >
                 {mobileMenuOpen ? (
                   <X className="w-6 h-6" />
@@ -165,7 +165,7 @@ const Navbar = () => {
 
         {/* Menu Mobile */}
         {currentUser && mobileMenuOpen && (
-          <div className="lg:hidden pb-4 border-t border-slate-700/50 mt-2 pt-4 animate-in slide-in-from-top duration-300">
+          <div className="lg:hidden pb-4 border-t border-gray-200 mt-2 pt-4 animate-in slide-in-from-top duration-300">
             <div className="space-y-1.5">
               {navLinks
                 .filter((link) => {
@@ -187,17 +187,17 @@ const Navbar = () => {
                     className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-300 ${
                       active
                         ? "bg-gradient-to-r from-red-600 to-red-500 shadow-lg shadow-red-500/25"
-                        : "hover:bg-slate-700/50"
+                        : "hover:bg-gray-100"
                     }`}
                   >
                     <Icon
                       className={`w-5 h-5 ${
-                        active ? "text-white" : "text-slate-400"
+                        active ? "text-white" : "text-gray-600"
                       }`}
                     />
                     <span
                       className={`font-medium ${
-                        active ? "text-white" : "text-slate-300"
+                        active ? "text-white" : "text-gray-700"
                       }`}
                     >
                       {link.label}
@@ -205,8 +205,8 @@ const Navbar = () => {
                   </Link>
                 );
               })}
-              <div className="pt-4 border-t border-slate-700/50 mt-4 space-y-2">
-                <div className="flex items-center space-x-3 px-4 py-3 bg-slate-800/50 backdrop-blur-sm rounded-xl border border-slate-700/50">
+              <div className="pt-4 border-t border-gray-200 mt-4 space-y-2">
+                <div className="flex items-center space-x-3 px-4 py-3 bg-white rounded-xl border border-gray-200">
                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center">
                     {isAdmin ? (
                       <User className="w-4 h-4 text-white" />
@@ -214,13 +214,13 @@ const Navbar = () => {
                       <Lock className="w-4 h-4 text-white" />
                     )}
                   </div>
-                  <span className="text-sm font-medium text-slate-200 truncate">
+                  <span className="text-sm font-medium text-gray-700 truncate">
                     {currentUser.email}
                   </span>
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-slate-800 hover:bg-red-600 border border-slate-700 hover:border-red-500 rounded-xl transition-all duration-300"
+                  className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-white hover:bg-red-50 border border-gray-200 hover:border-red-500 rounded-xl transition-all duration-300 text-gray-700 hover:text-red-600"
                 >
                   <LogOut className="w-5 h-5" />
                   <span className="font-medium">Sair</span>
