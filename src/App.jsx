@@ -60,7 +60,7 @@ const AppContent = () => {
       {!isLoginPage && <Navbar />}
       <div className={isLoginPage ? "" : ""}>
         {!isLoginPage && <Sidebar />}
-        <div className={isLoginPage ? "" : "lg:ml-72 lg:pt-20"}>
+        <div className={isLoginPage ? "" : "pt-20 lg:ml-72"}>
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route

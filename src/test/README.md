@@ -102,3 +102,4 @@ O objetivo é manter pelo menos 70% de cobertura de código. Execute `npm run te
 - Os mocks do Firebase devem estar configurados no `setup.js`
 - Verifique se os mocks estão corretos em `mocks/firebase.js`
 
+

@@ -48,3 +48,4 @@ npm test
 - Isso funciona porque o componente renderiza os inputs com atributo `name`
 - Para melhorar acessibilidade no futuro, considere adicionar `htmlFor` nos labels e `id` nos inputs
 
+

@@ -165,8 +165,8 @@ const Navbar = () => {
 
         {/* Menu Mobile */}
         {currentUser && mobileMenuOpen && (
-          <div className="lg:hidden pb-4 border-t border-gray-200 mt-2 pt-4 animate-in slide-in-from-top duration-300">
-            <div className="space-y-1.5">
+          <div className="lg:hidden border-t border-gray-200 mt-2 pt-4 animate-in slide-in-from-top duration-300 max-h-[calc(100vh-5rem)] overflow-y-auto">
+            <div className="space-y-1.5 pb-4">
               {navLinks
                 .filter((link) => {
                   // Admin tem acesso a tudo
