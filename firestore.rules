@@ -1,0 +1,220 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Função auxiliar para verificar se o usuário está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Função auxiliar para verificar se o usuário é admin
+    function isAdmin() {
+      return request.auth != null && (request.auth.uid == "xaFyAiOHhiWEPaWElr7REqGxBXX2" || (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin"));
+    }
+    
+    // Função auxiliar para verificar se a quantidade não é negativa
+    function isValidQuantity(quantity) {
+      return quantity is number && quantity >= 0;
+    }
+    
+    // ID do administrador inicial (hardcoded para bootstrap)
+    function isInitialAdmin() {
+      return request.auth != null && request.auth.uid == "xaFyAiOHhiWEPaWElr7REqGxBXX2";
+    }
+    
+    // Regras para a coleção 'items'
+    match /items/{itemId} {
+      // Permitir leitura apenas para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação apenas para admin
+      // Validar campos obrigatórios e quantidade não negativa
+      // Código é opcional (pode ser string vazia ou não existir)
+      allow create: if isAdmin() 
+        && request.resource.data.nome is string
+        && (request.resource.data.codigo is string || !("codigo" in request.resource.data))
+        && isValidQuantity(request.resource.data.quantidade);
+      
+      // Permitir atualização apenas para admin
+      // Não permitir alteração manual da quantidade (deve ser feita via transactions)
+      // Código é opcional mas não pode ser alterado se existir
+      allow update: if isAdmin()
+        && request.resource.data.nome is string
+        && (request.resource.data.codigo is string || !("codigo" in request.resource.data))
+        && isValidQuantity(request.resource.data.quantidade)
+        && (!("codigo" in request.resource.data) || !("codigo" in resource.data) || request.resource.data.codigo == resource.data.codigo); // Não permitir alterar código
+      
+      // Permitir exclusão apenas para admin
+      allow delete: if isAdmin();
+    }
+    
+    // Regras para a coleção 'entries'
+    match /entries/{entryId} {
+      // Permitir leitura apenas para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação apenas para admin
+      // Validar campos obrigatórios
+      // Código é opcional (pode ser string vazia)
+      allow create: if isAdmin()
+        && request.resource.data.itemId is string
+        && (request.resource.data.codigo is string || !("codigo" in request.resource.data))
+        && isValidQuantity(request.resource.data.quantidade)
+        && request.resource.data.usuarioQueRegistrou is string;
+      
+      // Não permitir atualização ou exclusão de entradas (histórico imutável)
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // Regras para a coleção 'itemBatches'
+    match /itemBatches/{batchId} {
+      // Permitir leitura apenas para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Criar/atualizar lote (quantidade não negativa)
+      // Validade pode ser string (data ou "sem-validade")
+      // validadeDate pode ser timestamp ou null (para produtos sem validade)
+      allow create, update: if isAdmin()
+        && request.resource.data.itemId is string
+        && request.resource.data.validade is string
+        && (request.resource.data.validadeDate is timestamp || request.resource.data.validadeDate == null)
+        && isValidQuantity(request.resource.data.quantidade);
+      
+      // Não permitir delete via cliente
+      allow delete: if false;
+    }
+
+    // Regras para a coleção 'exits'
+    match /exits/{exitId} {
+      // Permitir leitura apenas para usuários autenticados
+      allow read: if isAuthenticated();
+      
+      // Permitir criação apenas para admin
+      // Validar campos obrigatórios
+      // Código é opcional (pode ser string vazia)
+      // tipoSaida é opcional (padrão: "normal")
+      allow create: if isAdmin()
+        && request.resource.data.itemId is string
+        && (request.resource.data.codigo is string || !("codigo" in request.resource.data))
+        && isValidQuantity(request.resource.data.quantidade)
+        && (request.resource.data.tipoSaida is string || !("tipoSaida" in request.resource.data))
+        && request.resource.data.setorDestino is string
+        && request.resource.data.usuarioQueRegistrou is string;
+      
+      // Não permitir atualização ou exclusão de saídas (histórico imutável)
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Regras para a coleção 'orders'
+    match /orders/{orderId} {
+      // Permitir leitura para:
+      // - Admin pode ler todos os pedidos
+      // - Usuário pode ler seus próprios pedidos
+      allow get: if isAuthenticated() 
+        && (isAdmin() || resource.data.solicitadoPor == request.auth.uid);
+      
+      // Permitir listagem para usuários autenticados
+      // O código da aplicação garante que:
+      // - Admin usa getOrders() para ver todos
+      // - Usuários comuns usam getUserOrders() que filtra por solicitadoPor
+      allow list: if isAuthenticated();
+      
+      // Permitir criação para qualquer usuário autenticado
+      // Validar campos obrigatórios
+      allow create: if isAuthenticated()
+        && request.resource.data.status == "pendente"
+        && request.resource.data.solicitadoPor == request.auth.uid
+        && request.resource.data.itens is list
+        && request.resource.data.setorDestino is string;
+      
+      // Permitir atualização apenas para admin (aprovar/rejeitar/finalizar)
+      allow update: if isAdmin()
+        && request.resource.data.status in ["pendente", "aprovado", "rejeitado", "finalizado"];
+      
+      // Não permitir exclusão de pedidos (histórico imutável)
+      allow delete: if false;
+    }
+    
+    // Regras para a coleção 'users'
+    match /users/{userId} {
+      // Qualquer usuário autenticado pode ler seu próprio documento
+      // Admin pode ler qualquer documento
+      allow read: if isAuthenticated() && (isAdmin() || request.auth.uid == userId);
+      
+      // Usuário pode criar seu próprio documento (auto-registro)
+      // - Administrador inicial pode criar com role "admin"
+      // - Outros usuários só podem criar com role "read_only"
+      // - Admin existente pode criar qualquer documento
+      allow create: if isAuthenticated() 
+        && (isAdmin() || request.auth.uid == userId)
+        && request.resource.data.role is string
+        && (
+          // Admin existente pode criar qualquer role
+          isAdmin() ||
+          // Administrador inicial pode criar como admin
+          (isInitialAdmin() && request.resource.data.role == "admin") ||
+          // Outros usuários só podem criar como read_only
+          (!isInitialAdmin() && request.resource.data.role == "read_only")
+        );
+      
+      // Apenas admin pode atualizar documentos de usuários
+      // Administrador inicial sempre tem acesso
+      // Admin existente (verificado via documento) também tem acesso
+      allow update: if isAuthenticated()
+        && (
+          // Administrador inicial sempre pode atualizar qualquer documento
+          isInitialAdmin() ||
+          // Admin existente pode atualizar qualquer documento
+          (exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
+           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin")
+        )
+        && (
+          // Se estiver atualizando role, validar que é um role válido
+          !("role" in request.resource.data) ||
+          (request.resource.data.role is string && request.resource.data.role in ["admin", "read_only", "order_only", "entry_manager"])
+        );
+      
+      // Não permitir exclusão de usuários
+      allow delete: if false;
+    }
+    
+    // Regras para a coleção 'auditLogs'
+    match /auditLogs/{auditId} {
+      // Apenas admins podem ler logs de auditoria
+      allow read: if isAdmin();
+      
+      // Apenas admins podem criar logs de auditoria
+      allow create: if isAdmin();
+      
+      // Não permitir atualização ou exclusão de logs de auditoria (histórico imutável)
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // Regras para a coleção 'stockAdjustments'
+    match /stockAdjustments/{adjustmentId} {
+      // Permitir leitura apenas para admins
+      allow read: if isAdmin();
+      
+      // Permitir criação apenas para admins
+      // Validar campos obrigatórios
+      // Motivo é opcional (pode ser string vazia)
+      allow create: if isAdmin()
+        && request.resource.data.itemId is string
+        && request.resource.data.itemNome is string
+        && (request.resource.data.itemCodigo is string || !("itemCodigo" in request.resource.data))
+        && isValidQuantity(request.resource.data.quantidadeAnterior)
+        && isValidQuantity(request.resource.data.quantidadeNova)
+        && (request.resource.data.motivo is string || !("motivo" in request.resource.data))
+        && request.resource.data.usuarioId is string
+        && request.resource.data.usuarioId == request.auth.uid;
+      
+      // Não permitir atualização ou exclusão de ajustes (histórico imutável)
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}
+

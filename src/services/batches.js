@@ -1,0 +1,500 @@
+import {
+  collection,
+  doc,
+  getDocs,
+  query,
+  where,
+  orderBy,
+  runTransaction,
+  Timestamp,
+  serverTimestamp,
+  getDoc,
+} from "firebase/firestore";
+import { db } from "./firebase";
+
+const BATCHES_COLLECTION = "itemBatches";
+
+/** Gera ID único por item + validade (consistente) */
+const buildBatchId = (itemId, validade) => {
+  const key = validade ? String(validade) : "sem-validade";
+  return `${itemId}_${key}`;
+};
+
+/** Converte validade (string 'YYYY-MM-DD' ou Date) para Timestamp do Firestore */
+const toTimestamp = (validade) => {
+  if (!validade) return null;
+
+  // Aceita string YYYY-MM-DD ou objeto Date
+  let date;
+  if (typeof validade === "string") {
+    // garante interpretar como início do dia local
+    date = new Date(String(validade) + "T00:00:00");
+  } else if (validade instanceof Date) {
+    date = validade;
+  } else if (validade?.toDate) {
+    // possivelmente um Firestore Timestamp
+    return validade;
+  } else {
+    return null;
+  }
+
+  if (Number.isNaN(date.getTime())) return null;
+  return Timestamp.fromDate(date);
+};
+
+/** Converte validade para string ISO (YYYY-MM-DD) para armazenar no documento */
+const toISODateString = (validade) => {
+  if (!validade) return null;
+  let date;
+  if (typeof validade === "string") {
+    date = new Date(String(validade) + "T00:00:00");
+  } else if (validade instanceof Date) {
+    date = validade;
+  } else if (validade?.toDate) {
+    date = validade.toDate();
+  } else {
+    return null;
+  }
+  if (Number.isNaN(date.getTime())) return null;
+  const year = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${year}-${mm}-${dd}`;
+};
+
+/**
+ * Adiciona ou incrementa um lote
+ * - itemId: string
+ * - validade: string 'YYYY-MM-DD' (recomendado) ou Date
+ * - quantidade: number (inteiro)
+ */
+export const addOrIncrementBatch = async (itemId, validade, quantidade) => {
+  const qtd = parseInt(quantidade, 10);
+  if (!qtd || qtd <= 0) throw new Error("Quantidade deve ser maior que zero");
+  if (!itemId) throw new Error("itemId obrigatório");
+  
+  // Permitir validade null/undefined para produtos sem validade
+  let validadeIso = null;
+  let validadeTimestamp = null;
+  
+  if (validade) {
+    validadeIso = toISODateString(validade);
+    if (!validadeIso) throw new Error("Validade inválida");
+    validadeTimestamp = toTimestamp(validadeIso);
+  } else {
+    // Produto sem validade - usar string especial
+    validadeIso = "sem-validade";
+  }
+
+  const batchId = buildBatchId(itemId, validadeIso);
+  const batchRef = doc(db, BATCHES_COLLECTION, batchId);
+
+  return runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(batchRef);
+    const now = serverTimestamp();
+
+    if (!snap.exists()) {
+      transaction.set(batchRef, {
+        itemId,
+        validade: validadeIso,
+        validadeDate: validadeTimestamp, // null para produtos sem validade
+        quantidade: qtd,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return qtd;
+    }
+
+    const current = parseInt(snap.data().quantidade || 0, 10);
+    const newQty = current + qtd;
+    if (newQty < 0)
+      throw new Error("Quantidade do lote não pode ficar negativa");
+
+    transaction.update(batchRef, {
+      quantidade: newQty,
+      validade: validadeIso, // mantemos campo legível
+      validadeDate: validadeTimestamp, // null para produtos sem validade
+      updatedAt: now,
+    });
+
+    return newQty;
+  });
+};
+
+/**
+ * Pega todos lotes de um item (ordenados por validade asc)
+ * Retorna array de { id, ...data }
+ */
+export const getBatchesByItem = async (itemId) => {
+  if (!itemId) return [];
+  
+  // Buscar todos os lotes do item
+  const q = query(
+    collection(db, BATCHES_COLLECTION),
+    where("itemId", "==", itemId),
+    where("quantidade", ">", 0)
+  );
+  
+  const snap = await getDocs(q);
+  const allBatches = snap.docs.map((d) => ({
+    id: d.id,
+    ...d.data(),
+  }));
+  
+  // Separar lotes com validade e sem validade
+  const batchesWithValidity = allBatches.filter(b => b.validade && b.validade !== "sem-validade");
+  const batchesWithoutValidity = allBatches.filter(b => b.validade === "sem-validade");
+  
+  // Ordenar lotes com validade por data (mais próxima primeiro)
+  batchesWithValidity.sort((a, b) => {
+    if (!a.validadeDate && !b.validadeDate) return 0;
+    if (!a.validadeDate) return 1;
+    if (!b.validadeDate) return -1;
+    const dateA = a.validadeDate?.toDate ? a.validadeDate.toDate() : new Date(a.validade);
+    const dateB = b.validadeDate?.toDate ? b.validadeDate.toDate() : new Date(b.validade);
+    return dateA - dateB;
+  });
+  
+  // Retornar: primeiro lotes com validade (ordenados), depois sem validade
+  return [...batchesWithValidity, ...batchesWithoutValidity];
+};
+
+/**
+ * Consome estoque dos lotes na ordem FIFO por validade (mais próxima primeiro)
+ * - retorna { usedBatches: [{ batchId, validity, consumed, remaining }], earliestValidity }
+ */
+export const consumeFromBatches = async (itemId, quantidade) => {
+  const qtd = parseInt(quantidade, 10);
+  if (!qtd || qtd <= 0) throw new Error("Quantidade deve ser maior que zero");
+  if (!itemId) throw new Error("itemId obrigatório");
+
+  // Buscar todos os lotes do item (com e sem validade)
+  const q = query(
+    collection(db, BATCHES_COLLECTION),
+    where("itemId", "==", itemId),
+    where("quantidade", ">", 0)
+  );
+  const snap = await getDocs(q);
+  
+  // Separar lotes com validade e sem validade, ordenar manualmente
+  const batchesWithValidity = [];
+  const batchesWithoutValidity = [];
+  
+  snap.docs.forEach((docSnap) => {
+    const data = docSnap.data();
+    if (data.validade === "sem-validade" || !data.validadeDate) {
+      batchesWithoutValidity.push(docSnap);
+    } else {
+      batchesWithValidity.push(docSnap);
+    }
+  });
+  
+  // Ordenar lotes com validade por data (mais próxima primeiro) - FIFO
+  batchesWithValidity.sort((a, b) => {
+    const dateA = a.data().validadeDate?.toDate ? a.data().validadeDate.toDate() : new Date(a.data().validade);
+    const dateB = b.data().validadeDate?.toDate ? b.data().validadeDate.toDate() : new Date(b.data().validade);
+    return dateA - dateB;
+  });
+  
+  // Combinar: primeiro lotes com validade (ordenados por FIFO), depois sem validade
+  const sortedDocs = [...batchesWithValidity, ...batchesWithoutValidity];
+
+  if (sortedDocs.length === 0) {
+    throw new Error("Nenhum lote encontrado para este item");
+  }
+
+  let remaining = qtd;
+  const updates = [];
+
+  // Usamos uma transaction para atualizar múltiplos documentos
+  await runTransaction(db, async (transaction) => {
+    for (const docSnap of sortedDocs) {
+      if (remaining <= 0) break;
+
+      const data = docSnap.data();
+      const available = parseInt(data.quantidade || 0, 10);
+      if (available <= 0) continue;
+
+      const toConsume = Math.min(available, remaining);
+      const newQty = available - toConsume;
+
+      // garantir que o doc ainda existe e tem a quantidade esperada (transaction.get seria ideal, mas já temos documento)
+      const docRef = docSnap.ref;
+      transaction.update(docRef, {
+        quantidade: newQty,
+        updatedAt: serverTimestamp(),
+      });
+
+      updates.push({
+        batchId: docSnap.id,
+        validity: data.validade || null,
+        consumed: toConsume,
+        remaining: newQty,
+      });
+
+      remaining -= toConsume;
+    }
+
+    if (remaining > 0) {
+      throw new Error("Estoque insuficiente nos lotes");
+    }
+  });
+
+  // recalcula menor validade restante
+  const earliest = await getEarliestBatchValidity(itemId);
+
+  return {
+    usedBatches: updates,
+    earliestValidity: earliest,
+  };
+};
+
+/**
+ * Retorna a menor validade ativa (string 'YYYY-MM-DD') ou null
+ */
+export const getEarliestBatchValidity = async (itemId) => {
+  if (!itemId) return null;
+
+  // Buscar todos os lotes do item
+  const q = query(
+    collection(db, BATCHES_COLLECTION),
+    where("itemId", "==", itemId),
+    where("quantidade", ">", 0)
+  );
+
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+
+  // Filtrar apenas lotes com validade (ignorar "sem-validade")
+  const batchesWithValidity = [];
+  snap.docs.forEach((docSnap) => {
+    const data = docSnap.data();
+    if (data.validade && data.validade !== "sem-validade" && data.validadeDate) {
+      batchesWithValidity.push(docSnap);
+    }
+  });
+  
+  if (batchesWithValidity.length === 0) return null;
+  
+  // Ordenar por validade e retornar a mais próxima
+  batchesWithValidity.sort((a, b) => {
+    const dateA = a.data().validadeDate?.toDate ? a.data().validadeDate.toDate() : new Date(a.data().validade);
+    const dateB = b.data().validadeDate?.toDate ? b.data().validadeDate.toDate() : new Date(b.data().validade);
+    return dateA - dateB;
+  });
+  
+  return batchesWithValidity[0].data().validade || null;
+};
+
+/**
+ * Busca lotes que vencem até 'days' dias a partir de hoje (inclusivo).
+ * Retorna array de objetos resumidos por item:
+ *  [
+ *    { itemId, totalExpiring, earliestValidity, batchKeys: [batchId1, batchId2, ...] },
+ *    ...
+ *  ]
+ */
+export const getExpiringBatches = async (days = 7) => {
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  const limitDate = new Date(now);
+  limitDate.setDate(now.getDate() + days);
+  // Firestore queries com comparação de Timestamp: usamos limiteDate como Timestamp
+  const limitTimestamp = Timestamp.fromDate(limitDate);
+
+  // Buscar lotes com validade (excluindo "sem-validade")
+  // Nota: Firestore não permite usar where com != e orderBy juntos sem índice composto
+  // Vamos buscar todos e filtrar manualmente
+  const q = query(
+    collection(db, BATCHES_COLLECTION),
+    where("validadeDate", "<=", limitTimestamp),
+    where("quantidade", ">", 0),
+    orderBy("validadeDate", "asc")
+  );
+
+  const snap = await getDocs(q);
+  if (snap.empty) return [];
+
+  const map = {};
+
+  snap.forEach((docSnap) => {
+    const data = docSnap.data();
+    // Ignorar lotes sem validade
+    if (data.validade === "sem-validade" || !data.validadeDate) return;
+    
+    const itemId = data.itemId;
+    const qty = parseInt(data.quantidade || 0, 10) || 0;
+    const validade = data.validade || null;
+
+    if (!map[itemId]) {
+      map[itemId] = {
+        itemId,
+        totalExpiring: 0,
+        earliestValidity: validade,
+        batchKeys: [],
+      };
+    }
+
+    map[itemId].totalExpiring += qty;
+
+    // atualizar earliestValidity (string compare 'YYYY-MM-DD' funciona)
+    if (
+      !map[itemId].earliestValidity ||
+      (validade && validade < map[itemId].earliestValidity)
+    ) {
+      map[itemId].earliestValidity = validade;
+    }
+
+    map[itemId].batchKeys.push(docSnap.id);
+  });
+
+  return Object.values(map);
+};
+
+/**
+ * Decrementa um lote específico (útil se precisar reduzir manualmente)
+ * - batchId: id do documento do lote
+ * - quantidade: número inteiro (positivo para reduzir)
+ */
+export const decrementBatch = async (batchId, quantidade) => {
+  const qtd = parseInt(quantidade, 10);
+  if (!qtd || qtd <= 0) throw new Error("Quantidade deve ser maior que zero");
+  if (!batchId) throw new Error("batchId obrigatório");
+
+  const batchRef = doc(db, BATCHES_COLLECTION, batchId);
+
+  return runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(batchRef);
+    if (!snap.exists()) throw new Error("Lote não encontrado");
+
+    const current = parseInt(snap.data().quantidade || 0, 10);
+    const newQty = current - qtd;
+    if (newQty < 0) throw new Error("Quantidade do lote ficaria negativa");
+
+    transaction.update(batchRef, {
+      quantidade: newQty,
+      updatedAt: serverTimestamp(),
+    });
+
+    return newQty;
+  });
+};
+
+/**
+ * Atualiza a validade de um lote existente
+ * Se a validade mudar, move a quantidade para um novo lote e zera o antigo
+ */
+export const updateBatchValidity = async (batchId, novaValidade) => {
+  if (!batchId) throw new Error("batchId obrigatório");
+  
+  let validadeIso = null;
+  let validadeTimestamp = null;
+  
+  if (novaValidade) {
+    validadeIso = toISODateString(novaValidade);
+    if (!validadeIso) throw new Error("Validade inválida");
+    validadeTimestamp = toTimestamp(validadeIso);
+  } else {
+    validadeIso = "sem-validade";
+  }
+
+  const batchRef = doc(db, BATCHES_COLLECTION, batchId);
+  
+  // Primeiro, ler o lote atual
+  const currentBatch = await getDoc(batchRef);
+  if (!currentBatch.exists()) {
+    throw new Error("Lote não encontrado");
+  }
+  
+  const currentData = currentBatch.data();
+  const currentValidade = currentData.validade;
+  
+  if (currentValidade === validadeIso) {
+    // Mesma validade, não precisa fazer nada
+    return;
+  }
+  
+  const quantidade = parseInt(currentData.quantidade || 0, 10);
+  const itemId = currentData.itemId;
+  const newBatchId = buildBatchId(itemId, validadeIso);
+  
+  // Se o novo ID é diferente, precisamos mover para um novo lote
+  if (newBatchId !== batchId) {
+    // Verificar se já existe lote com a nova validade
+    const newBatchRef = doc(db, BATCHES_COLLECTION, newBatchId);
+    const existingNewBatch = await getDoc(newBatchRef);
+    
+    return runTransaction(db, async (transaction) => {
+      if (existingNewBatch.exists()) {
+        // Se já existe lote com a nova validade, incrementar quantidade
+        const currentQty = parseInt(existingNewBatch.data().quantidade || 0, 10);
+        transaction.update(newBatchRef, {
+          quantidade: currentQty + quantidade,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        // Criar novo lote com a nova validade
+        transaction.set(newBatchRef, {
+          itemId,
+          validade: validadeIso,
+          validadeDate: validadeTimestamp,
+          quantidade: quantidade,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+      
+      // Zerar o lote antigo (não podemos deletar por regras do Firestore)
+      transaction.update(batchRef, {
+        quantidade: 0,
+        updatedAt: serverTimestamp(),
+        // Manter outros campos para satisfazer as regras de segurança
+        itemId: currentData.itemId,
+        validade: currentData.validade,
+        validadeDate: currentData.validadeDate,
+      });
+    });
+  } else {
+    // Mesmo ID, apenas atualizar a validade
+    return runTransaction(db, async (transaction) => {
+      transaction.update(batchRef, {
+        validade: validadeIso,
+        validadeDate: validadeTimestamp,
+        updatedAt: serverTimestamp(),
+      });
+    });
+  }
+};
+
+/**
+ * Busca todos os lotes do sistema
+ * Retorna array de { id, ...data }
+ */
+export const getAllBatches = async () => {
+  try {
+    const q = query(
+      collection(db, BATCHES_COLLECTION),
+      orderBy("validadeDate", "asc")
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+    }));
+  } catch (error) {
+    console.error("Erro ao buscar todos os lotes:", error);
+    throw error;
+  }
+};
+
+export default {
+  addOrIncrementBatch,
+  consumeFromBatches,
+  getEarliestBatchValidity,
+  getBatchesByItem,
+  getExpiringBatches,
+  decrementBatch,
+  updateBatchValidity,
+  getAllBatches,
+};
+

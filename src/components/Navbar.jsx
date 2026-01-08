@@ -1,0 +1,258 @@
+import { useState } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+import { PERMISSIONS } from "../config/constants";
+import {
+  LogOut,
+  Home,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  History,
+  List,
+  Menu,
+  X,
+  User,
+  Lock,
+  FileText,
+  ShoppingCart,
+  PackageCheck,
+  Users,
+  Settings,
+  Upload,
+  Calendar,
+} from "lucide-react";
+import logoPrefeitura from "../assets/prefeiturajpg.png";
+
+const Navbar = () => {
+  const { currentUser, isAdmin, logout, hasPermission, userPermissions } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleLogout = async () => {
+    const result = await logout();
+    if (result.success) {
+      navigate("/login");
+      setMobileMenuOpen(false);
+    }
+  };
+
+  const isActive = (path) => {
+    return location.pathname === path;
+  };
+
+  const navLinks = [
+    { to: "/dashboard", icon: Home, label: "Dashboard", permission: PERMISSIONS.VIEW_DASHBOARD },
+    { to: "/items", icon: List, label: "Itens", permission: PERMISSIONS.VIEW_ITEMS },
+    { to: "/entry", icon: ArrowDownCircle, label: "Entrada", permission: PERMISSIONS.CREATE_ENTRY },
+    { to: "/exit", icon: ArrowUpCircle, label: "Saída", permission: PERMISSIONS.CREATE_EXIT },
+    {
+      to: "/entries-history",
+      icon: History,
+      label: "Hist. Entradas",
+      permission: PERMISSIONS.VIEW_ENTRIES_HISTORY,
+    },
+    {
+      to: "/exits-history",
+      icon: History,
+      label: "Hist. Saídas",
+      permission: PERMISSIONS.VIEW_EXITS_HISTORY,
+    },
+    {
+      to: "/reports",
+      icon: FileText,
+      label: "Relatórios",
+      permission: PERMISSIONS.VIEW_REPORTS,
+    },
+    {
+      to: "/orders",
+      icon: ShoppingCart,
+      label: "Pedidos",
+      permission: PERMISSIONS.CREATE_ORDER,
+    },
+    {
+      to: "/orders-management",
+      icon: PackageCheck,
+      label: "Gerenciar Pedidos",
+      permission: PERMISSIONS.MANAGE_ORDERS,
+    },
+    {
+      to: "/users-management",
+      icon: Users,
+      label: "Gerenciar Usuários",
+      permission: PERMISSIONS.MANAGE_USERS,
+    },
+    {
+      to: "/stock-adjustment",
+      icon: Settings,
+      label: "Ajuste de Estoque",
+      permission: PERMISSIONS.ADJUST_STOCK,
+    },
+    {
+      to: "/import-items",
+      icon: Upload,
+      label: "Importar Itens",
+      permission: PERMISSIONS.CREATE_ITEMS,
+    },
+    {
+      to: "/update-validities",
+      icon: Calendar,
+      label: "Atualizar Validades",
+      permission: PERMISSIONS.EDIT_ITEMS,
+    },
+  ];
+
+  return (
+    <nav className="bg-gray-50 text-gray-800 shadow-md fixed top-0 left-0 right-0 lg:left-72 z-50 border-b border-gray-200 transition-all duration-300">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between items-center h-20 gap-4">
+          {/* Logo e Título */}
+          <Link
+            to="/items"
+            className="flex items-center space-x-3 lg:space-x-4 group flex-shrink-0"
+          >
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-red-500 to-red-600 rounded-2xl blur-md opacity-50 group-hover:opacity-75 transition-opacity duration-300"></div>
+              <div className="relative bg-white rounded-2xl p-3 shadow-xl ring-1 ring-slate-200 group-hover:ring-red-500/50 transition-all duration-300">
+                <img
+                  src={logoPrefeitura}
+                  alt="Logo Prefeitura"
+                  className="h-11 w-auto object-contain"
+                />
+              </div>
+            </div>
+            <div className="hidden md:block">
+              <h1 className="text-base lg:text-lg font-bold tracking-wide text-gray-800 whitespace-nowrap">
+                Prefeitura de Lajinha
+              </h1>
+              <div className="flex items-center space-x-2">
+                <div className="h-1 w-1 bg-red-500 rounded-full"></div>
+                <h2 className="text-xs lg:text-sm font-medium text-gray-600 whitespace-nowrap">
+                  Controle de Estoque
+                </h2>
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5 whitespace-nowrap">
+                Sistema de Almoxarifado
+              </p>
+            </div>
+          </Link>
+
+          {/* Usuário e Logout Desktop */}
+          {currentUser && (
+            <>
+              <div className="hidden lg:flex items-center space-x-3">
+                <div className="flex items-center space-x-2 bg-white px-4 py-2.5 rounded-xl border border-gray-200 shadow-sm">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-md">
+                    {isAdmin ? (
+                      <User className="w-4 h-4 text-white" />
+                    ) : (
+                      <Lock className="w-4 h-4 text-white" />
+                    )}
+                  </div>
+                  <span className="text-sm font-medium text-gray-700 max-w-xs truncate">
+                    {currentUser.email}
+                  </span>
+                  {!isAdmin && !hasPermission(PERMISSIONS.CREATE_ENTRY) && !hasPermission(PERMISSIONS.CREATE_EXIT) && !hasPermission(PERMISSIONS.CREATE_ITEMS) && !hasPermission(PERMISSIONS.EDIT_ITEMS) && !hasPermission(PERMISSIONS.CREATE_ORDER) && (
+                    <span className="text-[11px] font-semibold text-yellow-700 bg-yellow-100 border border-yellow-300 px-2 py-0.5 rounded">
+                      Somente leitura
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="group flex items-center space-x-2 px-4 py-2.5 bg-white hover:bg-red-50 border border-gray-200 hover:border-red-500 rounded-xl transition-all duration-300 shadow-sm hover:shadow-md"
+                >
+                  <LogOut className="w-4 h-4 text-gray-600 group-hover:text-red-600 transition-colors" />
+                  <span className="text-sm font-medium text-gray-700 group-hover:text-red-600 transition-colors">
+                    Sair
+                  </span>
+                </button>
+              </div>
+
+              {/* Botão Menu Mobile */}
+              <button
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                className="lg:hidden p-2.5 rounded-xl hover:bg-gray-100 transition-all duration-300 text-gray-700"
+              >
+                {mobileMenuOpen ? (
+                  <X className="w-6 h-6" />
+                ) : (
+                  <Menu className="w-6 h-6" />
+                )}
+              </button>
+            </>
+          )}
+        </div>
+
+        {/* Menu Mobile */}
+        {currentUser && mobileMenuOpen && (
+          <div className="lg:hidden border-t border-gray-200 mt-2 pt-4 animate-in slide-in-from-top duration-300 max-h-[calc(100vh-5rem)] overflow-y-auto">
+            <div className="space-y-1.5 pb-4">
+              {navLinks
+                .filter((link) => {
+                  // Admin tem acesso a tudo
+                  if (isAdmin) return true;
+                  // Se não tem permissão definida, mostrar para todos autenticados
+                  if (!link.permission) return true;
+                  // Verificar se tem a permissão necessária
+                  return hasPermission(link.permission);
+                })
+                .map((link) => {
+                const Icon = link.icon;
+                const active = isActive(link.to);
+                return (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-300 ${
+                      active
+                        ? "bg-gradient-to-r from-red-600 to-red-500 shadow-lg shadow-red-500/25"
+                        : "hover:bg-gray-100"
+                    }`}
+                  >
+                    <Icon
+                      className={`w-5 h-5 ${
+                        active ? "text-white" : "text-gray-600"
+                      }`}
+                    />
+                    <span
+                      className={`font-medium ${
+                        active ? "text-white" : "text-gray-700"
+                      }`}
+                    >
+                      {link.label}
+                    </span>
+                  </Link>
+                );
+              })}
+              <div className="pt-4 border-t border-gray-200 mt-4 space-y-2">
+                <div className="flex items-center space-x-3 px-4 py-3 bg-white rounded-xl border border-gray-200">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center">
+                    {isAdmin ? (
+                      <User className="w-4 h-4 text-white" />
+                    ) : (
+                      <Lock className="w-4 h-4 text-white" />
+                    )}
+                  </div>
+                  <span className="text-sm font-medium text-gray-700 truncate">
+                    {currentUser.email}
+                  </span>
+                </div>
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-white hover:bg-red-50 border border-gray-200 hover:border-red-500 rounded-xl transition-all duration-300 text-gray-700 hover:text-red-600"
+                >
+                  <LogOut className="w-5 h-5" />
+                  <span className="font-medium">Sair</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </nav>
+  );
+};
+
+export default Navbar;
