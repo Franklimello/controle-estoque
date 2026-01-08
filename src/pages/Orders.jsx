@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { useItems } from "../context/ItemsContext";
 import { useToastContext } from "../context/ToastContext";
 import { createOrder } from "../services/orders";
-import { ShoppingCart, Plus, Trash2, Search, Send, Package, X, Check } from "lucide-react";
+import { ShoppingCart, Plus, Trash2, Search, Send, Package, X, Check, ArrowDown } from "lucide-react";
 import { fuzzySearch, sortByRelevance } from "../utils/fuzzySearch";
 import { getErrorMessage } from "../utils/errorHandler";
 
@@ -29,10 +29,10 @@ const Orders = () => {
     
     if (searchTerm.trim()) {
       result = items.filter((it) =>
-        fuzzySearch(it, searchTerm, ['nome', 'codigo'], 0.5)
+        fuzzySearch(it, searchTerm, ['nome', 'codigo', 'categoria'], 0.4)
       );
       // Ordenar por relevância (mais similares primeiro)
-      result = sortByRelevance(result, searchTerm, ['nome', 'codigo']);
+      result = sortByRelevance(result, searchTerm, ['nome', 'codigo', 'categoria']);
     }
     
     // Ordenar: produtos marcados como "SAI MUITO" primeiro
@@ -315,14 +315,22 @@ const Orders = () => {
             {/* Opção de produto customizado */}
             <div className="mt-4">
               {!showCustomProduct ? (
-                <button
-                  type="button"
-                  onClick={() => setShowCustomProduct(true)}
-                  className="w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-500 hover:text-blue-600 transition flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-5 h-5" />
-                  Adicionar produto não cadastrado
-                </button>
+                <div className="space-y-2">
+                  <div className="text-center">
+                    <p className="text-sm lg:text-base font-semibold text-gray-700 mb-2">
+                      NÃO ENCONTROU O PRODUTO QUE PROCURAVA? ADICIONE AQUI
+                    </p>
+                    <ArrowDown className="w-5 h-5 mx-auto text-gray-500 animate-bounce" />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomProduct(true)}
+                    className="w-full px-4 py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-blue-500 hover:text-blue-600 transition flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Adicionar produto não cadastrado
+                  </button>
+                </div>
               ) : (
                 <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
                   <div className="flex items-center justify-between mb-2">

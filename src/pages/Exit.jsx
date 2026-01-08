@@ -345,8 +345,8 @@ const Exit = () => {
           );
           successCount++;
           
-          // 🔄 Invalidar cache automaticamente após saída bem-sucedida
-          refreshItems();
+          // 🔄 Invalidar cache via evento (otimizado)
+          window.dispatchEvent(new Event('invalidateItemsCache'));
         } catch (error) {
           errorCount++;
           errors.push(`${exitItem.item.nome}: ${getErrorMessage(error)}`);
@@ -402,14 +402,14 @@ const Exit = () => {
   const alertaEstoqueBaixo =
     estoqueAposSaida !== null && estoqueAposSaida <= ESTOQUE_BAIXO_LIMITE;
 
-  // ✅ Busca fuzzy (tolerante a erros)
+  // ✅ Busca fuzzy (tolerante a erros) - melhorada
   const filteredItems = useMemo(() => {
     if (!searchTerm.trim()) return [];
 
     const filtered = items
-      .filter((it) => fuzzySearch(it, searchTerm, ['nome', 'codigo'], 0.5))
-      .slice(0, 8);
-    return sortByRelevance(filtered, searchTerm, ['nome', 'codigo']);
+      .filter((it) => fuzzySearch(it, searchTerm, ['nome', 'codigo', 'categoria'], 0.4))
+      .slice(0, 10);
+    return sortByRelevance(filtered, searchTerm, ['nome', 'codigo', 'categoria']);
   }, [items, searchTerm]);
 
   if (!hasPermission(PERMISSIONS.CREATE_EXIT)) {

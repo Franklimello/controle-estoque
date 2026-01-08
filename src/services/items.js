@@ -144,14 +144,17 @@ export const getItems = async () => {
       ...doc.data(),
     }));
 
-    // Expandir itens que têm múltiplos lotes com vencimentos diferentes
-    // ⚡ OTIMIZAÇÃO: Buscar lotes em paralelo para melhor performance
-    const itemsWithBatches = await Promise.all(
-      items.map(async (item) => {
-        const batches = await getBatchesByItem(item.id);
-        return { item, batches };
-      })
-    );
+    // ⚡ OTIMIZAÇÃO: Buscar todos os lotes de uma vez em vez de N queries
+    const itemIds = items.map(item => item.id);
+    // Importar dinamicamente para evitar dependência circular
+    const batchesModule = await import("./batches");
+    const batchesMap = await batchesModule.getBatchesByItems(itemIds);
+
+    // Mapear lotes para cada item
+    const itemsWithBatches = items.map((item) => {
+      const batches = batchesMap.get(item.id) || [];
+      return { item, batches };
+    });
 
     // Função auxiliar para extrair validade de um batch
     const extractValidityFromBatch = (batch) => {

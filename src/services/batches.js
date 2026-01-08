@@ -160,6 +160,76 @@ export const getBatchesByItem = async (itemId) => {
 };
 
 /**
+ * Busca todos os lotes de múltiplos itens de uma vez (otimização para reduzir queries)
+ * @param {Array<string>} itemIds - Array de IDs dos itens
+ * @returns {Promise<Map>} Map com itemId como chave e array de lotes como valor
+ */
+export const getBatchesByItems = async (itemIds) => {
+  try {
+    if (!itemIds || itemIds.length === 0) {
+      return new Map();
+    }
+
+    // Firestore tem limite de 10 itens no 'in', então dividir em chunks
+    const chunks = [];
+    for (let i = 0; i < itemIds.length; i += 10) {
+      chunks.push(itemIds.slice(i, i + 10));
+    }
+
+    // Buscar todos os chunks em paralelo
+    const batchPromises = chunks.map(chunk => {
+      const q = query(
+        collection(db, BATCHES_COLLECTION),
+        where("itemId", "in", chunk),
+        where("quantidade", ">", 0)
+      );
+      return getDocs(q);
+    });
+
+    const querySnapshots = await Promise.all(batchPromises);
+    
+    // Agrupar lotes por itemId
+    const batchesMap = new Map();
+    itemIds.forEach(id => batchesMap.set(id, []));
+
+    querySnapshots.forEach(snapshot => {
+      snapshot.docs.forEach(doc => {
+        const batchData = {
+          id: doc.id,
+          ...doc.data(),
+        };
+        const itemId = batchData.itemId;
+        if (batchesMap.has(itemId)) {
+          batchesMap.get(itemId).push(batchData);
+        }
+      });
+    });
+
+    // Ordenar lotes de cada item por validade (mesma lógica de getBatchesByItem)
+    batchesMap.forEach((batches, itemId) => {
+      const batchesWithValidity = batches.filter(b => b.validade && b.validade !== "sem-validade");
+      const batchesWithoutValidity = batches.filter(b => b.validade === "sem-validade");
+      
+      batchesWithValidity.sort((a, b) => {
+        if (!a.validadeDate && !b.validadeDate) return 0;
+        if (!a.validadeDate) return 1;
+        if (!b.validadeDate) return -1;
+        const dateA = a.validadeDate?.toDate ? a.validadeDate.toDate() : new Date(a.validade);
+        const dateB = b.validadeDate?.toDate ? b.validadeDate.toDate() : new Date(b.validade);
+        return dateA - dateB;
+      });
+      
+      batchesMap.set(itemId, [...batchesWithValidity, ...batchesWithoutValidity]);
+    });
+
+    return batchesMap;
+  } catch (error) {
+    console.error("Erro ao buscar lotes dos itens:", error);
+    throw error;
+  }
+};
+
+/**
  * Consome estoque dos lotes na ordem FIFO por validade (mais próxima primeiro)
  * - retorna { usedBatches: [{ batchId, validity, consumed, remaining }], earliestValidity }
  */
@@ -492,6 +562,7 @@ export default {
   consumeFromBatches,
   getEarliestBatchValidity,
   getBatchesByItem,
+  getBatchesByItems,
   getExpiringBatches,
   decrementBatch,
   updateBatchValidity,

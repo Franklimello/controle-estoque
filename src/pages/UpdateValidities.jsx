@@ -277,7 +277,8 @@ const UpdateValidities = () => {
 
             if (updatedCount > 0 || createdCount > 0) {
               success(`Atualização concluída! ${updatedCount} lote(s) atualizado(s), ${createdCount} lote(s) criado(s).`);
-              refreshItems();
+              // 🔄 Invalidar cache via evento (otimizado)
+              window.dispatchEvent(new Event('invalidateItemsCache'));
             }
 
             if (errorCount > 0 || notFoundCount > 0) {

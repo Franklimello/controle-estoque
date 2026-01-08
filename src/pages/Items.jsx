@@ -58,9 +58,12 @@ const Items = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Carregar itens apenas uma vez ao montar o componente
+  // O cache do ItemsContext já gerencia atualizações
   useEffect(() => {
-    refreshItems();
-  }, [refreshItems]);
+    // Não precisa chamar refreshItems() aqui - o ItemsContext já carrega automaticamente
+    // refreshItems() só deve ser chamado após operações que modificam dados
+  }, []);
 
   const filterLowStock = (items) => {
     return items.filter((item) => Number(item.quantidade) < ESTOQUE_BAIXO_LIMITE);
@@ -125,10 +128,10 @@ const Items = () => {
     // Depois aplicar busca fuzzy (tolerante a erros)
     if (searchTerm.trim() !== "") {
       updatedItems = updatedItems.filter((item) =>
-        fuzzySearch(item, searchTerm, ['nome', 'codigo', 'categoria'], 0.5)
+        fuzzySearch(item, searchTerm, ['nome', 'codigo', 'categoria', 'local', 'fornecedor'], 0.4)
       );
       // Ordenar por relevância (mais similares primeiro)
-      updatedItems = sortByRelevance(updatedItems, searchTerm, ['nome', 'codigo', 'categoria']);
+      updatedItems = sortByRelevance(updatedItems, searchTerm, ['nome', 'codigo', 'categoria', 'local', 'fornecedor']);
     } else {
       // Se não há busca, ordenar alfabeticamente
       updatedItems.sort((a, b) => a.nome.localeCompare(b.nome));
@@ -296,7 +299,8 @@ const Items = () => {
       const result = await normalizeAllItemNames(currentUser?.uid);
       if (result.success) {
         success(`Padronização concluída! ${result.updated} item(s) atualizado(s).`);
-        refreshItems();
+        // 🔄 Invalidar cache via evento (otimizado)
+        window.dispatchEvent(new Event('invalidateItemsCache'));
       } else {
         showError(result.error || "Erro ao padronizar nomes");
       }

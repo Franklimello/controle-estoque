@@ -3,11 +3,9 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { PERMISSIONS } from "../config/constants";
 import {
-  Home,
   List,
   ArrowDownCircle,
   ArrowUpCircle,
-  History,
   LogOut,
   User,
   Lock,
@@ -42,15 +40,6 @@ const Sidebar = () => {
 
   const navLinks = [
     { 
-      to: "/dashboard", 
-      icon: Home, 
-      label: "Dashboard", 
-      permission: PERMISSIONS.VIEW_DASHBOARD,
-      gradient: "from-blue-500 to-indigo-600",
-      bgGradient: "from-blue-50 to-indigo-50",
-      hoverGradient: "from-blue-100 to-indigo-100"
-    },
-    { 
       to: "/items", 
       icon: List, 
       label: "Itens", 
@@ -68,7 +57,7 @@ const Sidebar = () => {
       bgGradient: "from-amber-50 to-orange-50",
       hoverGradient: "from-amber-100 to-orange-100"
     },
-    { 
+    {
       to: "/exit", 
       icon: ArrowUpCircle, 
       label: "Saída", 
@@ -76,24 +65,6 @@ const Sidebar = () => {
       gradient: "from-rose-500 to-red-600",
       bgGradient: "from-rose-50 to-red-50",
       hoverGradient: "from-rose-100 to-red-100"
-    },
-    {
-      to: "/entries-history",
-      icon: History,
-      label: "Hist. Entradas",
-      permission: PERMISSIONS.VIEW_ENTRIES_HISTORY,
-      gradient: "from-cyan-500 to-blue-600",
-      bgGradient: "from-cyan-50 to-blue-50",
-      hoverGradient: "from-cyan-100 to-blue-100"
-    },
-    {
-      to: "/exits-history",
-      icon: History,
-      label: "Hist. Saídas",
-      permission: PERMISSIONS.VIEW_EXITS_HISTORY,
-      gradient: "from-pink-500 to-rose-600",
-      bgGradient: "from-pink-50 to-rose-50",
-      hoverGradient: "from-pink-100 to-rose-100"
     },
     {
       to: "/reports",

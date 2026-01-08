@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToastContext } from "../context/ToastContext";
@@ -7,9 +7,10 @@ import { addEntry } from "../services/entries";
 import { getItemByCodigo } from "../services/items";
 import { validateEntry } from "../utils/validators";
 import { CATEGORIAS_ALMOXARIFADO, PERMISSIONS } from "../config/constants";
-import { ArrowDownCircle, Save, X, Package } from "lucide-react";
+import { ArrowDownCircle, Save, X, Package, Search } from "lucide-react";
 import Modal from "../components/Modal";
 import ConfirmModal from "../components/ConfirmModal";
+import { fuzzySearch, sortByRelevance } from "../utils/fuzzySearch";
 
 const Entry = () => {
   const { currentUser, isAdmin, hasPermission } = useAuth();
@@ -22,7 +23,9 @@ const Entry = () => {
   const [showExpiredDateModal, setShowExpiredDateModal] = useState(false);
   const [pendingEntry, setPendingEntry] = useState(null);
   const [itemFound, setItemFound] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const codigoTimeoutRef = useRef(null);
+  const { items } = useItems();
   const [formData, setFormData] = useState({
     codigo: "",
     quantidade: "",
@@ -43,6 +46,17 @@ const Entry = () => {
       }
     };
   }, []);
+
+  // Busca fuzzy de itens por nome/código
+  const filteredItems = useMemo(() => {
+    if (!searchTerm.trim()) return [];
+    
+    const results = items
+      .filter((item) => fuzzySearch(item, searchTerm, ['nome', 'codigo', 'categoria'], 0.4))
+      .slice(0, 10);
+    
+    return sortByRelevance(results, searchTerm, ['nome', 'codigo', 'categoria']);
+  }, [items, searchTerm]);
 
   const handleCodigoChange = async (e) => {
     const codigo = e.target.value;
@@ -88,6 +102,34 @@ const Entry = () => {
         }
       }, 500);
     }
+  };
+
+  const handleItemSelect = (item) => {
+    setItemFound(item);
+    setFormData((prev) => ({
+      ...prev,
+      codigo: item.codigo || "",
+      nome: item.nome || "",
+      categoria: item.categoria || "",
+      unidade: item.unidade || "UN",
+      local: item.local || "",
+    }));
+    setSearchTerm("");
+    
+    // Normalizar validade do item
+    let validadeItem = "";
+    if (item.validade) {
+      if (item.validade.toDate) {
+        const date = item.validade.toDate();
+        const year = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, "0");
+        const dd = String(date.getDate()).padStart(2, "0");
+        validadeItem = `${year}-${mm}-${dd}`;
+      } else if (typeof item.validade === "string") {
+        validadeItem = item.validade;
+      }
+    }
+    setFormData((prev) => ({ ...prev, validade: validadeItem }));
   };
 
   const handleChange = (e) => {
@@ -196,8 +238,8 @@ const Entry = () => {
 
       success("Entrada registrada com sucesso!");
       
-      // 🔄 Invalidar cache automaticamente após entrada bem-sucedida
-      refreshItems();
+      // 🔄 Invalidar cache via evento (otimizado - agrupa múltiplas invalidações)
+      window.dispatchEvent(new Event('invalidateItemsCache'));
 
       // Limpar formulário após um delay
       setTimeout(() => {
@@ -228,7 +270,8 @@ const Entry = () => {
     try {
       await addEntry(pendingEntry, currentUser.uid);
       success("Entrada registrada com sucesso!");
-      refreshItems();
+      // 🔄 Invalidar cache via evento
+      window.dispatchEvent(new Event('invalidateItemsCache'));
       
       // Limpar formulário
       setFormData({
@@ -362,6 +405,45 @@ const Entry = () => {
                 <strong>Informação:</strong> Código de barras não informado.
                 Preencha o nome do item para criar ou identificar.
               </p>
+            </div>
+          )}
+
+          {/* Campo de busca por nome */}
+          {(!itemFound || !formData.codigo || formData.codigo.trim().length === 0) && (
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-bold mb-2">
+                Buscar Item por Nome ou Código
+              </label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+                  placeholder="Digite o nome ou código do item..."
+                />
+              </div>
+              {filteredItems.length > 0 && (
+                <div className="mt-2 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-10">
+                  {filteredItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleItemSelect(item)}
+                      className="w-full text-left px-4 py-2 hover:bg-green-50 border-b border-gray-100 last:border-b-0 transition-colors"
+                    >
+                      <div className="font-semibold text-gray-900">{item.nome}</div>
+                      {item.codigo && (
+                        <div className="text-xs text-gray-500">Código: {item.codigo}</div>
+                      )}
+                      {item.categoria && (
+                        <div className="text-xs text-gray-500">Categoria: {item.categoria}</div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

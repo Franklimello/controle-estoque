@@ -4,10 +4,8 @@ import { useAuth } from "../context/AuthContext";
 import { PERMISSIONS } from "../config/constants";
 import {
   LogOut,
-  Home,
   ArrowDownCircle,
   ArrowUpCircle,
-  History,
   List,
   Menu,
   X,
@@ -42,22 +40,9 @@ const Navbar = () => {
   };
 
   const navLinks = [
-    { to: "/dashboard", icon: Home, label: "Dashboard", permission: PERMISSIONS.VIEW_DASHBOARD },
     { to: "/items", icon: List, label: "Itens", permission: PERMISSIONS.VIEW_ITEMS },
     { to: "/entry", icon: ArrowDownCircle, label: "Entrada", permission: PERMISSIONS.CREATE_ENTRY },
     { to: "/exit", icon: ArrowUpCircle, label: "Saída", permission: PERMISSIONS.CREATE_EXIT },
-    {
-      to: "/entries-history",
-      icon: History,
-      label: "Hist. Entradas",
-      permission: PERMISSIONS.VIEW_ENTRIES_HISTORY,
-    },
-    {
-      to: "/exits-history",
-      icon: History,
-      label: "Hist. Saídas",
-      permission: PERMISSIONS.VIEW_EXITS_HISTORY,
-    },
     {
       to: "/reports",
       icon: FileText,

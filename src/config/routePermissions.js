@@ -6,14 +6,11 @@ import { PERMISSIONS } from "./constants";
  * Se múltiplas permissões, o usuário precisa ter pelo menos uma (OR)
  */
 export const ROUTE_PERMISSIONS = {
-  "/dashboard": PERMISSIONS.VIEW_DASHBOARD,
   "/items": PERMISSIONS.VIEW_ITEMS,
   "/new-item": PERMISSIONS.CREATE_ITEMS,
   "/edit-item": PERMISSIONS.EDIT_ITEMS,
   "/entry": PERMISSIONS.CREATE_ENTRY,
   "/exit": PERMISSIONS.CREATE_EXIT,
-  "/entries-history": PERMISSIONS.VIEW_ENTRIES_HISTORY,
-  "/exits-history": PERMISSIONS.VIEW_EXITS_HISTORY,
   "/reports": PERMISSIONS.VIEW_REPORTS,
   "/orders": PERMISSIONS.CREATE_ORDER,
   "/orders-management": PERMISSIONS.MANAGE_ORDERS,

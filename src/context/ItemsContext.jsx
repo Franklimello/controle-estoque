@@ -20,8 +20,8 @@ export const useItems = () => {
   return context;
 };
 
-// Cache com TTL de 2 minutos
-const CACHE_TTL = 2 * 60 * 1000;
+// Cache com TTL de 5 minutos (otimizado para reduzir queries)
+const CACHE_TTL = 5 * 60 * 1000;
 
 export const ItemsProvider = ({ children }) => {
   const [items, setItems] = useState([]);
@@ -82,13 +82,24 @@ export const ItemsProvider = ({ children }) => {
     loadItems();
     
     // 🔄 Listener para invalidar cache automaticamente após operações
+    // Usa debounce para evitar múltiplas atualizações em sequência
+    let invalidateTimeout = null;
     const handleInvalidateCache = () => {
-      loadItems(true);
+      if (invalidateTimeout) {
+        clearTimeout(invalidateTimeout);
+      }
+      // Debounce de 500ms - agrupa múltiplas invalidações
+      invalidateTimeout = setTimeout(() => {
+        loadItems(true);
+      }, 500);
     };
     
     window.addEventListener('invalidateItemsCache', handleInvalidateCache);
     
     return () => {
+      if (invalidateTimeout) {
+        clearTimeout(invalidateTimeout);
+      }
       window.removeEventListener('invalidateItemsCache', handleInvalidateCache);
     };
   }, []);

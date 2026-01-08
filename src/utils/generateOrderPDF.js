@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import "jspdf-autotable";
+import autoTable from "jspdf-autotable";
 import { formatDate } from "./validators";
 
 export const generateOrderPDF = (order) => {
@@ -44,15 +44,19 @@ export const generateOrderPDF = (order) => {
     tableRows.push(itemData);
   });
 
-  doc.autoTable(tableColumn, tableRows, {
+  autoTable(doc, {
+    head: [tableColumn],
+    body: tableRows,
     startY: 90,
     headStyles: { fillColor: [200, 200, 200], textColor: [0, 0, 0] },
     styles: { fontSize: 9, cellPadding: 2 },
     margin: { top: 10 }
   });
 
-  // Signature Line
-  const finalY = doc.autoTable.previous.finalY + 20;
+  // Signature Line - calcular posição final baseado na altura da tabela
+  // Altura aproximada: cabeçalho (8px) + linhas (6px cada) + margem
+  const tableHeight = 8 + (tableRows.length * 6) + 10;
+  const finalY = 90 + tableHeight + 20;
   doc.text(`Lajinha/MG, ${new Date().toLocaleDateString('pt-BR')}`, 14, finalY);
   doc.text("________________________________________", 14, finalY + 10);
   doc.text("Responsável pela separação", 14, finalY + 15);

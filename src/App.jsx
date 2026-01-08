@@ -14,14 +14,11 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import ConnectionIndicator from "./components/ConnectionIndicator";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
-import Dashboard from "./pages/Dashboard";
 import Items from "./pages/Items";
 import NewItem from "./pages/NewItem";
 import EditItem from "./pages/EditItem";
 import Entry from "./pages/Entry";
 import Exit from "./pages/Exit";
-import EntriesHistory from "./pages/EntriesHistory";
-import ExitsHistory from "./pages/ExitsHistory";
 import Reports from "./pages/Reports";
 import Orders from "./pages/Orders";
 import OrdersManagement from "./pages/OrdersManagement";
@@ -66,14 +63,6 @@ const AppContent = () => {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route
-              path="/dashboard"
-              element={
-                <ProtectedRoute permission={PERMISSIONS.VIEW_DASHBOARD}>
-                  <Dashboard />
-                </ProtectedRoute>
-              }
-            />
-            <Route
               path="/items"
               element={
                 <ProtectedRoute permission={PERMISSIONS.VIEW_ITEMS}>
@@ -110,22 +99,6 @@ const AppContent = () => {
               element={
                 <ProtectedRoute permission={PERMISSIONS.CREATE_EXIT}>
                   <Exit />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/entries-history"
-              element={
-                <ProtectedRoute permission={PERMISSIONS.VIEW_ENTRIES_HISTORY}>
-                  <EntriesHistory />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/exits-history"
-              element={
-                <ProtectedRoute permission={PERMISSIONS.VIEW_EXITS_HISTORY}>
-                  <ExitsHistory />
                 </ProtectedRoute>
               }
             />

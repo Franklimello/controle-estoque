@@ -219,7 +219,8 @@ const ImportItems = () => {
 
           if (successCount > 0) {
             success(`Importação concluída! ${successCount} item(s) importado(s) com sucesso.`);
-            refreshItems();
+            // 🔄 Invalidar cache via evento (otimizado)
+            window.dispatchEvent(new Event('invalidateItemsCache'));
           }
 
           if (errorCount > 0) {
@@ -248,7 +249,8 @@ const ImportItems = () => {
       const result = await fixMissingBatches(currentUser?.uid);
       if (result.success) {
         success(`Correção concluída! ${result.fixed} item(s) corrigido(s).`);
-        refreshItems();
+        // 🔄 Invalidar cache via evento (otimizado)
+        window.dispatchEvent(new Event('invalidateItemsCache'));
       } else {
         showError(result.error || "Erro ao corrigir lotes");
       }

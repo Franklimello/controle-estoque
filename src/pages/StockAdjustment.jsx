@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToastContext } from "../context/ToastContext";
@@ -53,10 +53,40 @@ const StockAdjustment = () => {
     };
   }, []);
 
-  // Busca fuzzy de itens
-  const filteredItems = items
-    .filter((it) => fuzzySearch(it, searchTerm, ['nome', 'codigo'], 0.5))
-    .slice(0, 8);
+  // Busca fuzzy de itens - melhorada com priorização de matches exatos
+  const filteredItems = useMemo(() => {
+    if (!searchTerm.trim()) return [];
+    
+    const searchLower = searchTerm.toLowerCase().trim();
+    
+    // Filtrar apenas itens originais (não expandidos) para evitar duplicatas
+    const originalItems = items.filter((it) => !it.isExpanded);
+    
+    // Primeiro, buscar matches exatos ou que contenham o termo (case-insensitive)
+    const exactMatches = originalItems.filter((it) => {
+      const nome = (it.nome || "").toLowerCase();
+      const codigo = (it.codigo || "").toLowerCase();
+      const categoria = (it.categoria || "").toLowerCase();
+      
+      return nome.includes(searchLower) || 
+             codigo.includes(searchLower) || 
+             categoria.includes(searchLower);
+    });
+    
+    // Se encontrou matches exatos, retornar apenas eles (ordenados por relevância)
+    if (exactMatches.length > 0) {
+      const sorted = sortByRelevance(exactMatches, searchTerm, ['nome', 'codigo', 'categoria']);
+      return sorted.slice(0, 30);
+    }
+    
+    // Se não encontrou matches exatos, usar busca fuzzy com similaridade mais alta
+    const fuzzyResults = originalItems
+      .filter((it) => fuzzySearch(it, searchTerm, ['nome', 'codigo', 'categoria'], 0.5))
+      .slice(0, 30);
+    
+    // Ordenar por relevância
+    return sortByRelevance(fuzzyResults, searchTerm, ['nome', 'codigo', 'categoria']);
+  }, [items, searchTerm]);
 
   const handleCodigoChange = async (e) => {
     const codigo = e.target.value;
@@ -118,7 +148,8 @@ const StockAdjustment = () => {
       
       // Atualizar item localmente
       setItemFound({ ...itemFound, saiMuito: newSaiMuito });
-      refreshItems();
+      // 🔄 Invalidar cache via evento (otimizado)
+      window.dispatchEvent(new Event('invalidateItemsCache'));
     } catch (error) {
       showError("Erro ao atualizar item: " + error.message);
     } finally {
@@ -252,31 +283,49 @@ const StockAdjustment = () => {
               </div>
 
               {/* Lista de resultados da busca */}
-              {searchTerm && filteredItems.length > 0 && (
-                <div className="mt-2 border border-gray-200 rounded-lg bg-white shadow-lg max-h-60 overflow-y-auto">
-                  {filteredItems.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => handleItemSelect(item)}
-                      className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0 transition"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-semibold text-gray-800">{item.nome}</p>
-                          {item.codigo && (
-                            <p className="text-xs text-gray-500">Código: {item.codigo}</p>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-bold text-gray-700">
-                            {item.quantidade || 0} {item.unidade || "UN"}
-                          </p>
-                        </div>
+              {searchTerm && (
+                <>
+                  {filteredItems.length > 0 ? (
+                    <div className="mt-2 border border-gray-200 rounded-lg bg-white shadow-lg max-h-80 overflow-y-auto">
+                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 text-xs text-gray-600 font-semibold">
+                        {filteredItems.length} resultado(s) encontrado(s)
                       </div>
-                    </button>
-                  ))}
-                </div>
+                      {filteredItems.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleItemSelect(item)}
+                          className="w-full px-4 py-3 text-left hover:bg-purple-50 border-b border-gray-100 last:border-b-0 transition"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <p className="font-semibold text-gray-800">{item.nome}</p>
+                              <div className="flex gap-3 mt-1">
+                                {item.codigo && (
+                                  <p className="text-xs text-gray-500">Código: {item.codigo}</p>
+                                )}
+                                {item.categoria && (
+                                  <p className="text-xs text-gray-500">Categoria: {item.categoria}</p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right ml-4">
+                              <p className="text-sm font-bold text-gray-700">
+                                {item.quantidade || 0} {item.unidade || "UN"}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="mt-2 border border-gray-200 rounded-lg bg-yellow-50 p-3">
+                      <p className="text-sm text-yellow-800">
+                        Nenhum item encontrado com "{searchTerm}". Tente buscar por parte do nome ou código.
+                      </p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 
@@ -514,7 +563,8 @@ const StockAdjustment = () => {
               );
 
               success("Ajuste de estoque registrado com sucesso!");
-              refreshItems();
+              // 🔄 Invalidar cache via evento (otimizado)
+              window.dispatchEvent(new Event('invalidateItemsCache'));
 
               // Limpar formulário
               setFormData({
