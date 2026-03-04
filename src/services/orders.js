@@ -13,6 +13,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { addExit } from "./exits";
+import { getItemById } from "./items";
 
 const ORDERS_COLLECTION = "orders";
 
@@ -27,6 +28,7 @@ export const createOrder = async (orderData, userId) => {
     const orderRef = await addDoc(collection(db, ORDERS_COLLECTION), {
       ...orderData,
       status: "pendente", // pendente, aprovado, rejeitado, finalizado
+      archived: false,
       solicitadoPor: userId,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -43,8 +45,9 @@ export const createOrder = async (orderData, userId) => {
  * @param {string} status - Filtrar por status (opcional)
  * @returns {Promise<Array>} Lista de pedidos
  */
-export const getOrders = async (status = null) => {
+export const getOrders = async (status = null, options = {}) => {
   try {
+    const { includeArchived = false } = options;
     let q;
     if (status) {
       q = query(
@@ -59,10 +62,16 @@ export const getOrders = async (status = null) => {
       );
     }
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map((doc) => ({
+    const orders = querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }));
+
+    if (includeArchived) {
+      return orders;
+    }
+
+    return orders.filter((order) => !order.archived);
   } catch (error) {
     console.error("Erro ao buscar pedidos:", error);
     throw error;
@@ -208,36 +217,83 @@ export const finalizeOrder = async (orderId, userId, editedItems = null) => {
     
     // Usar itens editados se fornecidos, caso contrário usar itens originais
     const itemsToProcess = editedItems || order.itens;
+    const registeredItems = itemsToProcess.filter((item) => item.itemId && !item.isCustom);
+
+    // Validação prévia para reduzir risco de baixa parcial
+    for (const item of registeredItems) {
+      const requestedQuantity = Number(item.quantidade || 0);
+      if (!requestedQuantity || requestedQuantity <= 0) {
+        throw new Error(`Quantidade inválida para o item ${item.nome || item.itemId}`);
+      }
+
+      const dbItem = await getItemById(item.itemId);
+      if (!dbItem) {
+        throw new Error(`Item não encontrado no estoque: ${item.nome || item.itemId}`);
+      }
+
+      const availableStock = Number(dbItem.quantidade || 0);
+      if (availableStock < requestedQuantity) {
+        throw new Error(
+          `Estoque insuficiente para ${dbItem.nome || item.nome || item.itemId}. Disponível: ${availableStock}, solicitado: ${requestedQuantity}`
+        );
+      }
+    }
     
-    // Criar saídas para cada item do pedido (apenas itens cadastrados e não customizados)
-    const exitPromises = itemsToProcess
-      .filter((item) => item.itemId && !item.isCustom) // Apenas itens cadastrados
-      .map(async (item) => {
-        try {
-          await addExit(
-            {
-              codigo: item.codigo || "",
-              itemId: item.itemId,
-              quantidade: item.quantidade,
-              setorDestino: order.setorDestino || "PSF",
-              retiradoPor: order.solicitadoPorNome || "Sistema",
-              observacao: `Pedido #${orderId} - ${item.nome || item.nomeProduto || ""}`,
-            },
-            userId
-          );
-        } catch (error) {
-          console.error(`Erro ao criar saída para item ${item.itemId}:`, error);
-          throw error;
-        }
-      });
-    
-    await Promise.all(exitPromises);
+    // Criar saídas de forma sequencial para evitar concorrência e reduzir inconsistência
+    for (const item of registeredItems) {
+      try {
+        await addExit(
+          {
+            codigo: item.codigo || "",
+            itemId: item.itemId,
+            quantidade: item.quantidade,
+            setorDestino: order.setorDestino || "PSF",
+            retiradoPor: order.solicitadoPorNome || "Sistema",
+            observacao: `Pedido #${orderId} - ${item.nome || item.nomeProduto || ""}`,
+          },
+          userId
+        );
+      } catch (error) {
+        console.error(`Erro ao criar saída para item ${item.itemId}:`, error);
+        throw error;
+      }
+    }
     
     // Atualizar status do pedido para finalizado
     await updateOrderStatus(orderId, "finalizado", userId, "Pedido baixado do estoque");
     
   } catch (error) {
     console.error("Erro ao finalizar pedido:", error);
+    throw error;
+  }
+};
+
+/**
+ * Arquiva ou desarquiva um pedido finalizado
+ * @param {string} orderId - ID do pedido
+ * @param {string} userId - ID do usuário admin
+ * @param {boolean} archived - true para arquivar, false para desarquivar
+ */
+export const archiveOrder = async (orderId, userId, archived = true) => {
+  try {
+    const order = await getOrderById(orderId);
+    if (!order) {
+      throw new Error("Pedido não encontrado");
+    }
+
+    if (order.status !== "finalizado") {
+      throw new Error("Apenas pedidos finalizados podem ser arquivados");
+    }
+
+    const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+    await updateDoc(orderRef, {
+      archived,
+      archivedBy: archived ? userId : null,
+      archivedAt: archived ? serverTimestamp() : null,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error("Erro ao arquivar pedido:", error);
     throw error;
   }
 };

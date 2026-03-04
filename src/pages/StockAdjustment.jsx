@@ -5,15 +5,17 @@ import { useToastContext } from "../context/ToastContext";
 import { useItems } from "../context/ItemsContext";
 import { addAdjustment, getAdjustments } from "../services/adjustments";
 import { getItemByCodigo, getItemById, updateItem } from "../services/items";
-import { Settings, Save, X, Search, AlertTriangle, Package, AlertCircle, TrendingUp } from "lucide-react";
+import { zeroAllStock } from "../services/bulkStock";
+import { Settings, Save, X, Search, AlertTriangle, Package, TrendingUp, Eraser } from "lucide-react";
 import { fuzzySearch, sortByRelevance } from "../utils/fuzzySearch";
 import ConfirmModal from "../components/ConfirmModal";
+import { CATEGORIAS_ALMOXARIFADO } from "../config/constants";
 
 const StockAdjustment = () => {
   const { currentUser, isAdmin } = useAuth();
   const navigate = useNavigate();
   const { success, error: showError } = useToastContext();
-  const { items, refreshItems } = useItems();
+  const { items } = useItems();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [itemFound, setItemFound] = useState(null);
@@ -22,13 +24,24 @@ const StockAdjustment = () => {
   const [pendingAdjustment, setPendingAdjustment] = useState(null);
   const codigoTimeoutRef = useRef(null);
   const [formData, setFormData] = useState({
-    codigo: "",
+    codigoBusca: "",
+    nome: "",
+    codigoItem: "",
+    categoria: "",
+    unidade: "UN",
+    local: "",
+    fornecedor: "",
+    validade: "",
     quantidadeAnterior: "",
     quantidadeNova: "",
+    quantidadeAdicionar: "",
     motivo: "",
     observacao: "",
   });
   const [recentAdjustments, setRecentAdjustments] = useState([]);
+  const [showZeroModal, setShowZeroModal] = useState(false);
+  const [zeroConfirmText, setZeroConfirmText] = useState("");
+  const [zeroLoading, setZeroLoading] = useState(false);
 
   // Buscar ajustes recentes
   const loadRecentAdjustments = async () => {
@@ -53,17 +66,32 @@ const StockAdjustment = () => {
     };
   }, []);
 
+  // Lista de itens para busca: 1 entrada por item (itens com vários lotes vêm como 1 só, com id = originalItemId)
+  const itemsParaBusca = useMemo(() => {
+    const semExpandir = items.filter((it) => !it.isExpanded);
+    const expandidos = items.filter((it) => it.isExpanded && it.originalItemId);
+    const porItemId = new Map();
+    semExpandir.forEach((it) => porItemId.set(it.id, { ...it }));
+    expandidos.forEach((it) => {
+      if (!porItemId.has(it.originalItemId)) {
+        porItemId.set(it.originalItemId, {
+          ...it,
+          id: it.originalItemId,
+          quantidade: it.quantidadeTotal ?? it.quantidade ?? 0,
+        });
+      }
+    });
+    return Array.from(porItemId.values());
+  }, [items]);
+
   // Busca fuzzy de itens - melhorada com priorização de matches exatos
   const filteredItems = useMemo(() => {
     if (!searchTerm.trim()) return [];
     
     const searchLower = searchTerm.toLowerCase().trim();
     
-    // Filtrar apenas itens originais (não expandidos) para evitar duplicatas
-    const originalItems = items.filter((it) => !it.isExpanded);
-    
     // Primeiro, buscar matches exatos ou que contenham o termo (case-insensitive)
-    const exactMatches = originalItems.filter((it) => {
+    const exactMatches = itemsParaBusca.filter((it) => {
       const nome = (it.nome || "").toLowerCase();
       const codigo = (it.codigo || "").toLowerCase();
       const categoria = (it.categoria || "").toLowerCase();
@@ -80,17 +108,65 @@ const StockAdjustment = () => {
     }
     
     // Se não encontrou matches exatos, usar busca fuzzy com similaridade mais alta
-    const fuzzyResults = originalItems
+    const fuzzyResults = itemsParaBusca
       .filter((it) => fuzzySearch(it, searchTerm, ['nome', 'codigo', 'categoria'], 0.5))
       .slice(0, 30);
     
     // Ordenar por relevância
     return sortByRelevance(fuzzyResults, searchTerm, ['nome', 'codigo', 'categoria']);
-  }, [items, searchTerm]);
+  }, [itemsParaBusca, searchTerm]);
+
+  const INTEGER_UNITS = ["UN", "PC", "CX"];
+  const normalizeQuantityByUnit = (rawValue, unidade) => {
+    const numericValue = Number(rawValue);
+    if (!Number.isFinite(numericValue)) return NaN;
+    const unitNormalized = (unidade || "").toUpperCase();
+    if (INTEGER_UNITS.includes(unitNormalized)) {
+      return Math.round(numericValue);
+    }
+    return Math.round(numericValue * 100) / 100;
+  };
+
+  const normalizeDateInput = (value) => {
+    if (!value) return "";
+    if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    if (value?.toDate) {
+      const date = value.toDate();
+      if (!Number.isNaN(date.getTime())) {
+        return date.toISOString().slice(0, 10);
+      }
+    }
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10);
+    }
+    return "";
+  };
+
+  const fillFormFromItem = (item) => {
+    const quantidadeNormalizada = normalizeQuantityByUnit(
+      item.quantidade || 0,
+      item.unidade || "UN"
+    );
+    setItemFound(item);
+    setFormData((prev) => ({
+      ...prev,
+      codigoBusca: item.codigo || "",
+      nome: item.nome || "",
+      codigoItem: item.codigo || "",
+      categoria: item.categoria || "",
+      unidade: item.unidade || "UN",
+      local: item.local || "",
+      fornecedor: item.fornecedor || "",
+      validade: normalizeDateInput(item.validade),
+      quantidadeAnterior: quantidadeNormalizada,
+      quantidadeNova: quantidadeNormalizada,
+    }));
+  };
 
   const handleCodigoChange = async (e) => {
     const codigo = e.target.value;
-    setFormData((prev) => ({ ...prev, codigo }));
+    setFormData((prev) => ({ ...prev, codigoBusca: codigo }));
     setItemFound(null);
     setError("");
 
@@ -102,12 +178,7 @@ const StockAdjustment = () => {
       codigoTimeoutRef.current = setTimeout(async () => {
         const item = await getItemByCodigo(codigo);
         if (item) {
-          setItemFound(item);
-          setFormData((prev) => ({
-            ...prev,
-            quantidadeAnterior: item.quantidade || 0,
-            quantidadeNova: item.quantidade || 0,
-          }));
+          fillFormFromItem(item);
         } else {
           setItemFound(null);
         }
@@ -115,14 +186,14 @@ const StockAdjustment = () => {
     }
   };
 
-  const handleItemSelect = (item) => {
-    setItemFound(item);
-    setFormData((prev) => ({
-      ...prev,
-      codigo: item.codigo || "",
-      quantidadeAnterior: item.quantidade || 0,
-      quantidadeNova: item.quantidade || 0,
-    }));
+  const handleItemSelect = async (item) => {
+    const realItemId = item.originalItemId || item.id;
+    const fullItem = await getItemById(realItemId);
+    if (!fullItem) {
+      setError("Item não encontrado");
+      return;
+    }
+    fillFormFromItem(fullItem);
     setSearchTerm("");
   };
 
@@ -132,6 +203,28 @@ const StockAdjustment = () => {
       ...prev,
       [name]: value,
     }));
+  };
+
+  const handleAddQuantidade = () => {
+    const quantidadeAtualNova = Number(formData.quantidadeNova) || 0;
+    const quantidadeParaAdicionar = Number(formData.quantidadeAdicionar);
+
+    if (Number.isNaN(quantidadeParaAdicionar) || quantidadeParaAdicionar <= 0) {
+      setError("Informe uma quantidade válida para adicionar");
+      return;
+    }
+
+    const novoTotalBruto = quantidadeAtualNova + quantidadeParaAdicionar;
+    const novoTotal = normalizeQuantityByUnit(
+      novoTotalBruto,
+      formData.unidade || itemFound?.unidade
+    );
+    setFormData((prev) => ({
+      ...prev,
+      quantidadeNova: novoTotal,
+      quantidadeAdicionar: "",
+    }));
+    setError("");
   };
 
   const handleToggleSaiMuito = async () => {
@@ -169,8 +262,26 @@ const StockAdjustment = () => {
 
     // Motivo é opcional agora
 
-    const quantidadeAnterior = parseFloat(formData.quantidadeAnterior);
-    const quantidadeNova = parseFloat(formData.quantidadeNova);
+    const quantidadeAnterior = normalizeQuantityByUnit(
+      formData.quantidadeAnterior,
+      formData.unidade || itemFound?.unidade
+    );
+    const quantidadeNova = normalizeQuantityByUnit(
+      formData.quantidadeNova,
+      formData.unidade || itemFound?.unidade
+    );
+    const hasStockChange = Math.abs(quantidadeAnterior - quantidadeNova) > 0.0001;
+
+    const itemUpdateData = {};
+    if ((itemFound.nome || "") !== formData.nome.trim()) itemUpdateData.nome = formData.nome.trim();
+    if ((itemFound.codigo || "") !== formData.codigoItem.trim()) itemUpdateData.codigo = formData.codigoItem.trim();
+    if ((itemFound.categoria || "") !== formData.categoria) itemUpdateData.categoria = formData.categoria;
+    if ((itemFound.unidade || "UN") !== formData.unidade) itemUpdateData.unidade = formData.unidade;
+    if ((itemFound.local || "") !== formData.local.trim()) itemUpdateData.local = formData.local.trim();
+    if ((itemFound.fornecedor || "") !== formData.fornecedor.trim()) itemUpdateData.fornecedor = formData.fornecedor.trim();
+    if (normalizeDateInput(itemFound.validade) !== (formData.validade || "")) {
+      itemUpdateData.validade = formData.validade || null;
+    }
 
     if (isNaN(quantidadeAnterior) || isNaN(quantidadeNova)) {
       setError("Quantidades devem ser números válidos");
@@ -182,8 +293,8 @@ const StockAdjustment = () => {
       return;
     }
 
-    if (quantidadeAnterior === quantidadeNova) {
-      setError("A quantidade nova deve ser diferente da anterior");
+    if (!hasStockChange && Object.keys(itemUpdateData).length === 0) {
+      setError("Nenhuma alteração foi detectada");
       return;
     }
 
@@ -197,6 +308,8 @@ const StockAdjustment = () => {
       observacao: formData.observacao,
       itemNome: itemFound.nome,
       diferenca,
+      itemUpdateData,
+      hasStockChange,
     });
     setShowConfirmModal(true);
   };
@@ -233,7 +346,7 @@ const StockAdjustment = () => {
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-bold text-gray-800 flex items-center">
               <Settings className="w-6 h-6 mr-2 text-purple-600" />
-              Ajuste Manual de Estoque
+              Editar Item e Ajustar Estoque
             </h1>
             <button
               onClick={() => navigate("/items")}
@@ -255,11 +368,11 @@ const StockAdjustment = () => {
               <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-semibold text-yellow-800 mb-1">
-                  ⚠️ Ajuste Manual de Estoque
+                  ⚠️ Editar item e ajustar estoque
                 </p>
                 <p className="text-xs text-yellow-700">
-                  Use esta funcionalidade para corrigir divergências encontradas em inventários físicos ou para ajustar quantidades manualmente. 
-                  Todos os ajustes são registrados no histórico.
+                  Use esta tela para ajustar quantidade e também atualizar os dados cadastrais do item (nome, código, categoria, unidade, local, fornecedor e validade).
+                  Ajustes de estoque continuam sendo registrados no histórico.
                 </p>
               </div>
             </div>
@@ -336,8 +449,8 @@ const StockAdjustment = () => {
               </label>
               <input
                 type="text"
-                name="codigo"
-                value={formData.codigo}
+                    name="codigoBusca"
+                    value={formData.codigoBusca}
                 onChange={handleCodigoChange}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
                 placeholder="Digite ou escaneie o código"
@@ -360,6 +473,107 @@ const StockAdjustment = () => {
                     <p className="text-xl font-bold text-blue-800">
                       {itemFound.quantidade || 0} {itemFound.unidade || "UN"}
                     </p>
+                    <p className="text-xs text-blue-600 mt-1">
+                      Validade: {normalizeDateInput(itemFound.validade) || "Sem validade"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Dados do item */}
+            {itemFound && (
+              <div className="border border-gray-200 rounded-lg p-4 space-y-4">
+                <h3 className="font-semibold text-gray-800">Dados do item</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-gray-700 text-sm font-bold mb-2">Nome do Item *</label>
+                    <input
+                      type="text"
+                      name="nome"
+                      value={formData.nome}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 text-sm font-bold mb-2">Código de Barras</label>
+                    <input
+                      type="text"
+                      name="codigoItem"
+                      value={formData.codigoItem}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 text-sm font-bold mb-2">Categoria</label>
+                    <select
+                      name="categoria"
+                      value={formData.categoria}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                      <option value="">Selecione uma categoria</option>
+                      {CATEGORIAS_ALMOXARIFADO.map((categoria) => (
+                        <option key={categoria} value={categoria}>
+                          {categoria}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 text-sm font-bold mb-2">Unidade</label>
+                    <select
+                      name="unidade"
+                      value={formData.unidade}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    >
+                      <option value="UN">UN (Unidade)</option>
+                      <option value="KG">KG (Quilograma)</option>
+                      <option value="LT">LT (Litro)</option>
+                      <option value="MT">MT (Metro)</option>
+                      <option value="CX">CX (Caixa)</option>
+                      <option value="PC">PC (Peça)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 text-sm font-bold mb-2">Local</label>
+                    <input
+                      type="text"
+                      name="local"
+                      value={formData.local}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 text-sm font-bold mb-2">Fornecedor</label>
+                    <input
+                      type="text"
+                      name="fornecedor"
+                      value={formData.fornecedor}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-gray-700 text-sm font-bold mb-2">Validade</label>
+                    <input
+                      type="date"
+                      name="validade"
+                      value={formData.validade}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
+                    />
                   </div>
                 </div>
               </div>
@@ -404,24 +618,68 @@ const StockAdjustment = () => {
                   <p className="text-xs text-gray-500 mt-1">
                     Quantidade após o ajuste
                   </p>
-                  {/* Botão Marcar como SAI MUITO */}
-                  {itemFound && (
-                    <button
-                      type="button"
-                      onClick={handleToggleSaiMuito}
-                      disabled={loading}
-                      className={`mt-2 w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 font-medium text-sm shadow-md hover:shadow-lg ${
-                        itemFound.saiMuito
-                          ? "bg-orange-500 hover:bg-orange-600 text-white"
-                          : "bg-gray-200 hover:bg-gray-300 text-gray-700"
-                      }`}
-                    >
-                      <TrendingUp className="w-4 h-4" />
-                      <span>{itemFound.saiMuito ? "Desmarcar como SAI MUITO" : "Marcar como SAI MUITO"}</span>
-                    </button>
-                  )}
                 </div>
               </div>
+            )}
+
+            {/* Soma incremental para contagem por salas/setores */}
+            {itemFound && (
+              <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                <p className="text-sm font-semibold text-indigo-800 mb-2">
+                  Somar contagem (ex.: por sala/setor)
+                </p>
+                <p className="text-xs text-indigo-700 mb-3">
+                  Digite a quantidade contada e clique em "Adicionar". O valor será somado na quantidade nova.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="number"
+                    name="quantidadeAdicionar"
+                    value={formData.quantidadeAdicionar}
+                    onChange={handleChange}
+                    step="0.01"
+                    min="0"
+                    placeholder="Quantidade para somar"
+                    className="w-full sm:flex-1 px-4 py-2 border border-indigo-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddQuantidade}
+                    className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition font-medium"
+                  >
+                    Adicionar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        quantidadeAdicionar: "",
+                      }))
+                    }
+                    className="px-4 py-2 rounded-lg border border-indigo-300 text-indigo-700 hover:bg-indigo-100 transition font-medium"
+                  >
+                    Limpar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Botão Marcar como SAI MUITO */}
+            {itemFound && (
+              <button
+                type="button"
+                onClick={handleToggleSaiMuito}
+                disabled={loading}
+                className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-all duration-200 font-medium text-sm shadow-md hover:shadow-lg ${
+                  itemFound.saiMuito
+                    ? "bg-orange-500 hover:bg-orange-600 text-white"
+                    : "bg-gray-200 hover:bg-gray-300 text-gray-700"
+                }`}
+              >
+                <TrendingUp className="w-4 h-4" />
+                <span>{itemFound.saiMuito ? "Desmarcar como SAI MUITO" : "Marcar como SAI MUITO"}</span>
+              </button>
             )}
 
             {/* Diferença */}
@@ -495,7 +753,7 @@ const StockAdjustment = () => {
                 </div>
                 <Save className="w-5 h-5 relative z-10" />
                 <span className="relative z-10">
-                  {loading ? "Registrando..." : "Registrar Ajuste"}
+                  {loading ? "Salvando..." : "Salvar Alterações"}
                 </span>
               </button>
             </div>
@@ -534,7 +792,28 @@ const StockAdjustment = () => {
                 ))}
               </div>
             </div>
-          )          }
+          )}
+
+          {/* Zerar todo o estoque (apenas admin) */}
+          {isAdmin && (
+            <div className="mt-8 pt-6 border-t border-gray-200">
+              <h2 className="text-lg font-bold text-gray-800 mb-2">Sistema limpo</h2>
+              <p className="text-sm text-gray-600 mb-4">
+                Para fazer uma contagem do zero e zerar o estoque de todos os itens e lotes.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowZeroModal(true);
+                  setZeroConfirmText("");
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-100 text-red-800 hover:bg-red-200 font-medium transition"
+              >
+                <Eraser className="w-5 h-5" />
+                Zerar todo o estoque
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -551,26 +830,44 @@ const StockAdjustment = () => {
             
             setLoading(true);
             try {
-              await addAdjustment(
-                {
-                  itemId: pendingAdjustment.itemId,
-                  quantidadeAnterior: pendingAdjustment.quantidadeAnterior,
-                  quantidadeNova: pendingAdjustment.quantidadeNova,
-                  motivo: pendingAdjustment.motivo,
-                  observacao: pendingAdjustment.observacao,
-                },
-                currentUser.uid
-              );
+              if (Object.keys(pendingAdjustment.itemUpdateData || {}).length > 0) {
+                await updateItem(
+                  pendingAdjustment.itemId,
+                  pendingAdjustment.itemUpdateData,
+                  currentUser.uid
+                );
+              }
 
-              success("Ajuste de estoque registrado com sucesso!");
+              if (pendingAdjustment.hasStockChange) {
+                await addAdjustment(
+                  {
+                    itemId: pendingAdjustment.itemId,
+                    quantidadeAnterior: pendingAdjustment.quantidadeAnterior,
+                    quantidadeNova: pendingAdjustment.quantidadeNova,
+                    motivo: pendingAdjustment.motivo,
+                    observacao: pendingAdjustment.observacao,
+                  },
+                  currentUser.uid
+                );
+              }
+
+              success("Alterações do item salvas com sucesso!");
               // 🔄 Invalidar cache via evento (otimizado)
               window.dispatchEvent(new Event('invalidateItemsCache'));
 
               // Limpar formulário
               setFormData({
-                codigo: "",
+                codigoBusca: "",
+                nome: "",
+                codigoItem: "",
+                categoria: "",
+                unidade: "UN",
+                local: "",
+                fornecedor: "",
+                validade: "",
                 quantidadeAnterior: "",
                 quantidadeNova: "",
+                quantidadeAdicionar: "",
                 motivo: "",
                 observacao: "",
               });
@@ -586,16 +883,76 @@ const StockAdjustment = () => {
               setLoading(false);
             }
           }}
-          title="Confirmar Ajuste de Estoque"
+          title="Confirmar alterações do item"
           message={`Item: ${pendingAdjustment.itemNome}\n` +
-            `Quantidade anterior: ${pendingAdjustment.quantidadeAnterior}\n` +
-            `Quantidade nova: ${pendingAdjustment.quantidadeNova}\n` +
-            `Diferença: ${pendingAdjustment.diferenca > 0 ? '+' : ''}${pendingAdjustment.diferenca}\n\n` +
-            `Motivo: ${pendingAdjustment.motivo}`}
+            (pendingAdjustment.hasStockChange
+              ? `Quantidade anterior: ${pendingAdjustment.quantidadeAnterior}\n` +
+                `Quantidade nova: ${pendingAdjustment.quantidadeNova}\n` +
+                `Diferença: ${pendingAdjustment.diferenca > 0 ? '+' : ''}${pendingAdjustment.diferenca}\n\n`
+              : "Sem ajuste de quantidade\n\n") +
+            `Campos cadastrais alterados: ${Object.keys(pendingAdjustment.itemUpdateData || {}).length}\n` +
+            `Motivo: ${pendingAdjustment.motivo || "-"}`}
           confirmText="Confirmar"
           cancelText="Cancelar"
           variant="info"
         />
+      )}
+
+      {/* Modal Zerar todo o estoque */}
+      {showZeroModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-800 mb-2">Zerar todo o estoque</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Isso vai colocar a quantidade de <strong>todos os itens</strong> e de <strong>todos os lotes</strong> em zero e remover as <strong>datas de validade</strong> cadastradas. Use apenas para começar uma contagem do zero. Esta ação não pode ser desfeita automaticamente.
+            </p>
+            <p className="text-sm font-semibold text-red-700 mb-2">
+              Digite <strong>ZERAR</strong> para confirmar (maiúsculas ou minúsculas):
+            </p>
+            <input
+              type="text"
+              value={zeroConfirmText}
+              onChange={(e) => setZeroConfirmText(e.target.value)}
+              placeholder="Digite ZERAR aqui"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 mb-4"
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowZeroModal(false);
+                  setZeroConfirmText("");
+                }}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={zeroConfirmText.trim().toUpperCase() !== "ZERAR" || zeroLoading}
+                onClick={async () => {
+                  if (zeroConfirmText.trim().toUpperCase() !== "ZERAR") return;
+                  setZeroLoading(true);
+                  try {
+                    const { itemsUpdated, batchesUpdated } = await zeroAllStock(currentUser.uid);
+                    success(`Estoque zerado: ${itemsUpdated} itens e ${batchesUpdated} lotes atualizados.`);
+                    window.dispatchEvent(new Event("invalidateItemsCache"));
+                    setShowZeroModal(false);
+                    setZeroConfirmText("");
+                    loadRecentAdjustments();
+                  } catch (err) {
+                    showError("Erro ao zerar estoque: " + err.message);
+                  } finally {
+                    setZeroLoading(false);
+                  }
+                }}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {zeroLoading ? "Zerando..." : "Zerar todo o estoque"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

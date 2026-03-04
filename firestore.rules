@@ -215,6 +215,15 @@ service cloud.firestore {
       allow update: if false;
       allow delete: if false;
     }
+
+    // Regras para contadores do sistema (ex.: geração de código sequencial)
+    match /systemCounters/{counterId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAdmin()
+        && request.resource.data.current is number
+        && request.resource.data.current >= 0;
+      allow delete: if false;
+    }
   }
 }
 

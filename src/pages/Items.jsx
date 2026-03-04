@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useItems } from "../context/ItemsContext";
 import { useAuth } from "../context/AuthContext";
 import { useToastContext } from "../context/ToastContext";
 import ItemCard from "../components/ItemCard";
-import { Search, Plus, AlertTriangle, Clock, Printer, Filter, X, Package, ArrowDownCircle, ArrowUpCircle, FileSpreadsheet, ChevronLeft, ChevronRight, Ban, TrendingUp, Text } from "lucide-react";
+import { Search, Plus, AlertTriangle, Clock, Printer, Filter, X, Package, ArrowDownCircle, ArrowUpCircle, FileSpreadsheet, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Ban, TrendingUp, Text } from "lucide-react";
 import { checkExpiringDate, formatExpiryDate } from "../utils/dateUtils";
 import { exportStockToExcel } from "../utils/exportExcel";
 import { usePagination } from "../hooks/usePagination";
@@ -37,11 +37,14 @@ const Items = () => {
   const { success, error: showError } = useToastContext();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [filteredItems, setFilteredItems] = useState([]);
   const [filterType, setFilterType] = useState("all");
   const [showMobileFilters, setShowMobileFilters] = useState(false);
   const [normalizingNames, setNormalizingNames] = useState(false);
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  const [showSaiMuitoSection, setShowSaiMuitoSection] = useState(true);
+  const searchInputRef = useRef(null);
   
   // Paginação
   const { currentItems, currentPage, totalPages, nextPage, prevPage, goToPage, hasNextPage, hasPrevPage, itemsPerPage, setItemsPerPage } = usePagination(filteredItems, 20);
@@ -56,6 +59,35 @@ const Items = () => {
     const handleResize = () => setWindowWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Debounce da busca para melhorar performance em listas grandes
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 250);
+    return () => clearTimeout(timeout);
+  }, [searchTerm]);
+
+  // Atalho "/" para focar rapidamente no campo de busca
+  useEffect(() => {
+    const handleShortcutFocusSearch = (event) => {
+      const target = event.target;
+      const tagName = target?.tagName?.toLowerCase();
+      const isTypingContext =
+        tagName === "input" ||
+        tagName === "textarea" ||
+        tagName === "select" ||
+        target?.isContentEditable;
+
+      if (event.key === "/" && !isTypingContext) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+
+    window.addEventListener("keydown", handleShortcutFocusSearch);
+    return () => window.removeEventListener("keydown", handleShortcutFocusSearch);
   }, []);
 
   // Carregar itens apenas uma vez ao montar o componente
@@ -99,9 +131,27 @@ const Items = () => {
 
   useEffect(() => {
     let updatedItems = [...items];
+    const sortStockFirstByName = (a, b) => {
+      const aHasStock = Number(a.quantidade || 0) > 0 ? 0 : 1;
+      const bHasStock = Number(b.quantidade || 0) > 0 ? 0 : 1;
+      if (aHasStock !== bHasStock) return aHasStock - bHasStock;
+      return (a.nome || "").localeCompare(b.nome || "", "pt-BR");
+    };
+    const normalizeSearchValue = (value) =>
+      String(value || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
 
     // Aplicar filtros primeiro - todos usam a lista completa de items
     switch (filterType) {
+      case "withStock":
+        updatedItems = items.filter((item) => Number(item.quantidade || 0) > 0);
+        break;
+      case "zeroStock":
+        updatedItems = items.filter((item) => Number(item.quantidade || 0) === 0);
+        break;
       case "lowStock":
         updatedItems = filterLowStock(items);
         break;
@@ -126,15 +176,27 @@ const Items = () => {
     }
 
     // Depois aplicar busca fuzzy (tolerante a erros)
-    if (searchTerm.trim() !== "") {
-      updatedItems = updatedItems.filter((item) =>
-        fuzzySearch(item, searchTerm, ['nome', 'codigo', 'categoria', 'local', 'fornecedor'], 0.4)
+    if (debouncedSearchTerm.trim() !== "") {
+      const fields = ['nome', 'codigo', 'categoria', 'local', 'fornecedor'];
+      const normalizedTerm = normalizeSearchValue(debouncedSearchTerm);
+
+      // 1) Primeiro, trazer apenas matches diretos por contains (mais assertivo)
+      const directMatches = updatedItems.filter((item) =>
+        fields.some((field) => normalizeSearchValue(item[field]).includes(normalizedTerm))
       );
-      // Ordenar por relevância (mais similares primeiro)
-      updatedItems = sortByRelevance(updatedItems, searchTerm, ['nome', 'codigo', 'categoria', 'local', 'fornecedor']);
+
+      if (directMatches.length > 0) {
+        updatedItems = sortByRelevance(directMatches, debouncedSearchTerm, fields);
+      } else {
+        // 2) Só se não existir match direto, usar fuzzy com limiar mais restritivo
+        updatedItems = updatedItems.filter((item) =>
+          fuzzySearch(item, debouncedSearchTerm, fields, 0.65)
+        );
+        updatedItems = sortByRelevance(updatedItems, debouncedSearchTerm, fields);
+      }
     } else {
-      // Se não há busca, ordenar alfabeticamente
-      updatedItems.sort((a, b) => a.nome.localeCompare(b.nome));
+      // Se não há busca, mostrar primeiro itens com estoque e depois sem estoque
+      updatedItems.sort(sortStockFirstByName);
     }
 
     // 📊 AGRUPAMENTO VISUAL: Agrupar itens expandidos (lotes) do mesmo item
@@ -189,10 +251,12 @@ const Items = () => {
     });
 
     setFilteredItems(groupedItems);
-  }, [searchTerm, items, filterType]);
+  }, [debouncedSearchTerm, items, filterType]);
 
   const filterLabels = {
     all: "Todos os itens",
+    withStock: "Com estoque",
+    zeroStock: "Zerados",
     lowStock: "Somente estoque baixo",
     nearExpiry: "Somente perto do vencimento",
     lowStockAndNearExpiry: "Estoque baixo e perto do vencimento",
@@ -328,11 +392,12 @@ const Items = () => {
           </div>
 
         {/* Search and Filters Card */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 mb-6">
+        <div className="sticky top-2 z-20 bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-100 p-4 sm:p-6 mb-6">
           {/* Search Bar */}
           <div className="relative mb-4">
             <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5 transition-colors duration-200" />
             <input
+              ref={searchInputRef}
               type="text"
               placeholder="Buscar por nome, código ou categoria..."
               value={searchTerm}
@@ -348,6 +413,13 @@ const Items = () => {
               </button>
             )}
           </div>
+          <div className="mb-4 flex items-center justify-between text-xs sm:text-sm text-gray-600">
+            <span>
+              {filteredItems.length} resultado(s)
+              {debouncedSearchTerm.trim() ? ` para "${debouncedSearchTerm}"` : ""}
+            </span>
+            <span className="text-gray-500">Atalho: /</span>
+          </div>
 
           {/* Desktop Filters */}
           <div className="hidden lg:flex items-center gap-3 flex-wrap">
@@ -355,6 +427,24 @@ const Items = () => {
               <Filter className="w-4 h-4" />
               Filtros:
             </div>
+            <FilterButton
+              type="withStock"
+              icon={Package}
+              label="Com Estoque"
+              activeColor="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white"
+              hoverColor="hover:bg-emerald-50 hover:border-emerald-300"
+              filterType={filterType}
+              setFilterType={setFilterType}
+            />
+            <FilterButton
+              type="zeroStock"
+              icon={Ban}
+              label="Zerados"
+              activeColor="bg-gradient-to-r from-slate-700 to-slate-600 text-white"
+              hoverColor="hover:bg-slate-50 hover:border-slate-300"
+              filterType={filterType}
+              setFilterType={setFilterType}
+            />
             <FilterButton
               type="lowStock"
               icon={AlertTriangle}
@@ -448,6 +538,24 @@ const Items = () => {
             {showMobileFilters && (
               <div className="mt-3 space-y-2 animate-fadeIn">
                 <FilterButton
+                  type="withStock"
+                  icon={Package}
+                  label="Com Estoque"
+                  activeColor="bg-gradient-to-r from-emerald-600 to-emerald-500 text-white"
+                  hoverColor="hover:bg-emerald-50 hover:border-emerald-300"
+                  filterType={filterType}
+                  setFilterType={setFilterType}
+                />
+                <FilterButton
+                  type="zeroStock"
+                  icon={Ban}
+                  label="Zerados"
+                  activeColor="bg-gradient-to-r from-slate-700 to-slate-600 text-white"
+                  hoverColor="hover:bg-slate-50 hover:border-slate-300"
+                  filterType={filterType}
+                  setFilterType={setFilterType}
+                />
+                <FilterButton
                   type="lowStock"
                   icon={AlertTriangle}
                   label="Estoque Baixo"
@@ -515,46 +623,61 @@ const Items = () => {
         {/* Seção Produtos mais pedidos */}
         {itemsSaiMuito.length > 0 && filterType === "all" && (
           <div className="mb-6 bg-gradient-to-br from-orange-50 to-orange-100 rounded-2xl shadow-lg border-2 border-orange-200 p-4 sm:p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-orange-500 rounded-lg">
-                <TrendingUp className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <h2 className="text-xl sm:text-2xl font-bold text-orange-900">
-                  Produtos mais pedidos
-                </h2>
-                <p className="text-sm text-orange-700">{itemsSaiMuito.length} produto(s) marcado(s)</p>
-              </div>
-            </div>
-            <div className="space-y-2">
-              {itemsSaiMuito.slice(0, windowWidth < 1024 ? 6 : 10).map((item) => (
-                <div
-                  key={item.id}
-                  onClick={() => isAdmin && navigate(`/edit-item/${item.id}`)}
-                  className={`bg-white rounded-lg p-3 shadow-sm border border-orange-200 hover:border-orange-400 transition-all ${
-                    isAdmin ? "cursor-pointer hover:shadow-md" : "cursor-default"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-sm text-gray-900 truncate">{item.nome}</div>
-                    </div>
-                    <div className="ml-4 text-sm font-semibold text-orange-700 whitespace-nowrap">
-                      {item.quantidade || 0} {item.unidade || "UN"}
-                    </div>
-                  </div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-500 rounded-lg">
+                  <TrendingUp className="w-5 h-5 text-white" />
                 </div>
-              ))}
-            </div>
-            {itemsSaiMuito.length > (windowWidth < 1024 ? 6 : 10) && (
-              <div className="text-center mt-4">
-                <button
-                  onClick={() => setFilterType("saiMuito")}
-                  className="text-sm text-orange-600 hover:text-orange-700 font-medium underline"
-                >
-                  Ver todos os {itemsSaiMuito.length} produtos mais pedidos
-                </button>
+                <div>
+                  <h2 className="text-xl sm:text-2xl font-bold text-orange-900">
+                    Produtos mais pedidos
+                  </h2>
+                  <p className="text-sm text-orange-700">{itemsSaiMuito.length} produto(s) marcado(s)</p>
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={() => setShowSaiMuitoSection((prev) => !prev)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/70 hover:bg-white text-orange-800 border border-orange-200 transition"
+              >
+                <span className="text-sm font-medium">{showSaiMuitoSection ? "Recolher" : "Expandir"}</span>
+                {showSaiMuitoSection ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              </button>
+            </div>
+
+            {showSaiMuitoSection && (
+              <>
+                <div className="space-y-2">
+                  {itemsSaiMuito.slice(0, windowWidth < 1024 ? 6 : 10).map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => isAdmin && navigate(`/edit-item/${item.id}`)}
+                      className={`bg-white rounded-lg p-3 shadow-sm border border-orange-200 hover:border-orange-400 transition-all ${
+                        isAdmin ? "cursor-pointer hover:shadow-md" : "cursor-default"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-sm text-gray-900 truncate">{item.nome}</div>
+                        </div>
+                        <div className="ml-4 text-sm font-semibold text-orange-700 whitespace-nowrap">
+                          {item.quantidade || 0} {item.unidade || "UN"}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {itemsSaiMuito.length > (windowWidth < 1024 ? 6 : 10) && (
+                  <div className="text-center mt-4">
+                    <button
+                      onClick={() => setFilterType("saiMuito")}
+                      className="text-sm text-orange-600 hover:text-orange-700 font-medium underline"
+                    >
+                      Ver todos os {itemsSaiMuito.length} produtos mais pedidos
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -814,12 +937,12 @@ const Items = () => {
                           </td>
                           <td className="px-3 py-2">
                             {isGroupHeader ? (
-                              <span className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-bold rounded-full bg-blue-600 text-white shadow-md whitespace-nowrap border-2 border-blue-700">
+                              <span className="inline-flex items-center justify-center px-3 py-1.5 text-xs font-bold rounded-none bg-blue-600 text-white shadow-md whitespace-nowrap border-2 border-blue-700">
                                 AGRUPADO
                               </span>
                             ) : (
                               <span
-                                className={`inline-block px-2 py-1 text-xs font-semibold rounded-full ${statusColor}`}
+                                className={`inline-block px-2 py-1 text-xs font-semibold rounded-none ${statusColor}`}
                               >
                                 {statusBadge}
                               </span>

@@ -22,6 +22,10 @@ const Orders = () => {
   
   // Estado para itens selecionados (com quantidade)
   const [selectedItems, setSelectedItems] = useState({});
+  const normalizePositiveQuantity = (value) => {
+    const parsed = parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  };
 
   // Filtrar itens para exibição com busca fuzzy
   const filteredItems = useMemo(() => {
@@ -64,13 +68,35 @@ const Orders = () => {
 
   // Atualizar quantidade de item selecionado
   const handleUpdateSelectedQuantity = (itemId, quantidade) => {
-    if (quantidade <= 0) {
-      handleToggleItem(itemId); // Remove se quantidade for 0
+    if (quantidade === "") {
+      setSelectedItems((prev) => ({
+        ...prev,
+        [itemId]: { ...prev[itemId], quantidade: "" },
+      }));
       return;
     }
+    const parsed = parseInt(quantidade, 10);
+    if (!Number.isFinite(parsed)) return;
     setSelectedItems((prev) => ({
       ...prev,
       [itemId]: { ...prev[itemId], quantidade },
+    }));
+  };
+
+  const handleFocusSelectedQuantity = (itemId) => {
+    setSelectedItems((prev) => ({
+      ...prev,
+      [itemId]: { ...prev[itemId], quantidade: "" },
+    }));
+  };
+
+  const handleBlurSelectedQuantity = (itemId) => {
+    setSelectedItems((prev) => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        quantidade: normalizePositiveQuantity(prev[itemId]?.quantidade),
+      },
     }));
   };
 
@@ -91,7 +117,7 @@ const Orders = () => {
           itemId: finalItemId, // Usar ID original se expandido
           codigo: item.codigo || "",
           nome: item.nome,
-          quantidade: data.quantidade,
+          quantidade: normalizePositiveQuantity(data.quantidade),
           unidade: item.unidade || "UN",
           estoqueAtual: estoqueAtual,
         };
@@ -154,12 +180,28 @@ const Orders = () => {
 
   // Atualizar quantidade
   const handleUpdateQuantity = (index, quantidade) => {
-    if (quantidade <= 0) {
-      handleRemoveItem(index);
+    if (quantidade === "") {
+      const updated = [...orderItems];
+      updated[index].quantidade = "";
+      setOrderItems(updated);
       return;
     }
+    const parsed = parseInt(quantidade, 10);
+    if (!Number.isFinite(parsed)) return;
     const updated = [...orderItems];
-    updated[index].quantidade = quantidade;
+    updated[index].quantidade = parsed;
+    setOrderItems(updated);
+  };
+
+  const handleFocusOrderQuantity = (index) => {
+    const updated = [...orderItems];
+    updated[index].quantidade = "";
+    setOrderItems(updated);
+  };
+
+  const handleBlurOrderQuantity = (index) => {
+    const updated = [...orderItems];
+    updated[index].quantidade = normalizePositiveQuantity(updated[index].quantidade);
     setOrderItems(updated);
   };
 
@@ -179,7 +221,10 @@ const Orders = () => {
     try {
       await createOrder(
         {
-          itens: orderItems,
+          itens: orderItems.map((item) => ({
+            ...item,
+            quantidade: normalizePositiveQuantity(item.quantidade),
+          })),
           setorDestino: setorDestino.trim(),
           observacao: observacao.trim(),
           whatsappSolicitante: whatsappSolicitante.trim(),
@@ -293,10 +338,12 @@ const Orders = () => {
                                 type="number"
                                 min="1"
                                 value={quantidadeSolicitada}
+                                onFocus={() => handleFocusSelectedQuantity(itemIdToUse)}
+                                onBlur={() => handleBlurSelectedQuantity(itemIdToUse)}
                                 onChange={(e) =>
                                   handleUpdateSelectedQuantity(
                                     itemIdToUse,
-                                    parseInt(e.target.value) || 1
+                                    e.target.value
                                   )
                                 }
                                 className="w-16 lg:w-20 px-2 py-1 text-xs lg:text-sm border border-gray-300 rounded text-center font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -411,8 +458,10 @@ const Orders = () => {
                               type="number"
                               min="1"
                               value={item.quantidade}
+                              onFocus={() => handleFocusOrderQuantity(index)}
+                              onBlur={() => handleBlurOrderQuantity(index)}
                               onChange={(e) =>
-                                handleUpdateQuantity(index, parseInt(e.target.value) || 1)
+                                handleUpdateQuantity(index, e.target.value)
                               }
                               className="w-16 lg:w-20 px-2 py-1 text-xs lg:text-sm border border-gray-300 rounded text-center font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />

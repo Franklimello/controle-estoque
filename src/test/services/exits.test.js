@@ -90,6 +90,7 @@ describe('Exits Service', () => {
       }
 
       itemsService.getItemByCodigo.mockResolvedValue(item)
+      itemsService.decrementStock.mockRejectedValue(new Error('Estoque insuficiente'))
 
       await expect(
         exitsService.addExit(
@@ -137,14 +138,6 @@ describe('Exits Service', () => {
     })
 
     it('deve buscar item por itemId quando código não for fornecido', async () => {
-      const item = {
-        id: 'item123',
-        codigo: '123',
-        nome: 'Item Teste',
-        quantidade: 50,
-      }
-
-      itemsService.getItemById.mockResolvedValue(item)
       itemsService.decrementStock.mockResolvedValue(undefined)
       batchesService.consumeFromBatches.mockResolvedValue({
         usedBatches: [],
@@ -161,7 +154,7 @@ describe('Exits Service', () => {
         'user123'
       )
 
-      expect(itemsService.getItemById).toHaveBeenCalledWith('item123')
+      expect(itemsService.getItemById).not.toHaveBeenCalled()
       expect(itemsService.decrementStock).toHaveBeenCalled()
     })
 

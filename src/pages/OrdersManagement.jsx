@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useItems } from "../context/ItemsContext";
 import { useToastContext } from "../context/ToastContext";
-import { getOrders, updateOrderStatus, finalizeOrder } from "../services/orders";
-import { Check, X, Package, ShoppingCart, AlertTriangle, Clock, CheckCircle, XCircle, MessageCircle, Printer } from "lucide-react";
+import { getOrders, updateOrderStatus, finalizeOrder, archiveOrder } from "../services/orders";
+import { Check, X, Package, ShoppingCart, AlertTriangle, Clock, CheckCircle, XCircle, MessageCircle, Printer, RefreshCw } from "lucide-react";
 import { formatDate } from "../utils/validators";
 import { generateOrderPDF } from "../utils/generateOrderPDF";
 
@@ -16,17 +16,20 @@ const OrdersManagement = () => {
   const [filterStatus, setFilterStatus] = useState("pendente"); // pendente, aprovado, rejeitado, finalizado
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [observacaoAdmin, setObservacaoAdmin] = useState("");
+  const [showArchivedFinalized, setShowArchivedFinalized] = useState(false);
   // Estado para controlar itens selecionados e quantidades editadas antes de baixar
   const [itemsToFinalize, setItemsToFinalize] = useState({}); // { orderId: { itemIndex: { selected: boolean, quantidade: number } } }
 
   useEffect(() => {
     loadOrders();
-  }, [filterStatus]);
+  }, [filterStatus, showArchivedFinalized]);
 
   const loadOrders = async () => {
     setLoading(true);
     try {
-      const ordersData = await getOrders(filterStatus);
+      const ordersData = await getOrders(filterStatus, {
+        includeArchived: filterStatus === "finalizado" ? showArchivedFinalized : false,
+      });
       setOrders(ordersData);
     } catch (error) {
       showError("Erro ao carregar pedidos: " + error.message);
@@ -74,6 +77,22 @@ const OrdersManagement = () => {
     }
   };
 
+  const handleArchive = async (orderId, archived = true) => {
+    setLoading(true);
+    try {
+      await archiveOrder(orderId, currentUser.uid, archived);
+      success(archived ? "Pedido arquivado com sucesso!" : "Pedido desarquivado com sucesso!");
+      if (selectedOrder?.id === orderId) {
+        setSelectedOrder(null);
+      }
+      loadOrders();
+    } catch (error) {
+      showError("Erro ao arquivar pedido: " + (error?.message || "erro desconhecido"));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Inicializar itens para finalização quando um pedido aprovado é selecionado
   const initializeItemsToFinalize = (order) => {
     if (order.status === "aprovado" && !itemsToFinalize[order.id]) {
@@ -110,7 +129,26 @@ const OrdersManagement = () => {
 
   // Atualizar quantidade de item para finalização
   const handleUpdateQuantityForFinalize = (orderId, itemIndex, quantidade) => {
-    if (quantidade < 0) return;
+    if (quantidade === "") {
+      setItemsToFinalize((prev) => {
+        const orderItems = prev[orderId] || {};
+        return {
+          ...prev,
+          [orderId]: {
+            ...orderItems,
+            [itemIndex]: {
+              ...orderItems[itemIndex],
+              quantidade: "",
+            },
+          },
+        };
+      });
+      return;
+    }
+
+    const parsed = parseInt(quantidade, 10);
+    if (!Number.isFinite(parsed) || parsed < 0) return;
+
     setItemsToFinalize((prev) => {
       const orderItems = prev[orderId] || {};
       return {
@@ -119,11 +157,114 @@ const OrdersManagement = () => {
           ...orderItems,
           [itemIndex]: {
             ...orderItems[itemIndex],
-            quantidade: Math.max(0, quantidade),
+            quantidade: Math.max(0, parsed),
           },
         },
       };
     });
+  };
+
+  const handleFocusQuantityForFinalize = (orderId, itemIndex) => {
+    handleUpdateQuantityForFinalize(orderId, itemIndex, "");
+  };
+
+  const handleBlurQuantityForFinalize = (orderId, itemIndex) => {
+    const currentValue = itemsToFinalize[orderId]?.[itemIndex]?.quantidade;
+    const normalized = Number.isFinite(Number(currentValue)) && Number(currentValue) > 0
+      ? Math.floor(Number(currentValue))
+      : 1;
+    handleUpdateQuantityForFinalize(orderId, itemIndex, normalized);
+  };
+
+  const formatFinalizeError = (rawMessage) => {
+    const message = rawMessage || "erro desconhecido";
+    if (message.includes("Estoque insuficiente")) {
+      return `Pré-validação falhou: ${message}`;
+    }
+    if (message.includes("Quantidade inválida")) {
+      return `Revise as quantidades selecionadas: ${message}`;
+    }
+    if (message.includes("Item não encontrado no estoque")) {
+      return `Não foi possível localizar um item para baixa: ${message}`;
+    }
+    return `Erro ao finalizar pedido: ${message}`;
+  };
+
+  const getOrderItemStock = (orderItem) => {
+    const itemData = items.find((it) => {
+      const originalId = it.originalItemId || it.id;
+      return originalId === orderItem.itemId || it.id === orderItem.itemId;
+    });
+
+    if (!itemData) return null;
+    if (itemData.isExpanded && itemData.quantidadeTotal !== undefined) {
+      return Number(itemData.quantidadeTotal || 0);
+    }
+    return Number(itemData.quantidade || 0);
+  };
+
+  const getFinalizeSummary = (order) => {
+    const orderItemsState = itemsToFinalize[order.id] || {};
+    let selected = 0;
+    let ready = 0;
+    let withIssues = 0;
+    let unselected = 0;
+    let customSkipped = 0;
+    const issues = [];
+
+    order.itens.forEach((item, index) => {
+      const itemState = orderItemsState[index] || {
+        selected: !item.isCustom,
+        quantidade: item.quantidade,
+      };
+
+      if (item.isCustom) {
+        customSkipped += 1;
+      }
+
+      if (!itemState.selected) {
+        unselected += 1;
+        return;
+      }
+
+      selected += 1;
+      const qtd = Number(itemState.quantidade || 0);
+      if (!qtd || qtd <= 0) {
+        withIssues += 1;
+        issues.push(`${item.nome || item.nomeProduto || `Item ${index + 1}`}: quantidade inválida`);
+        return;
+      }
+
+      if (item.isCustom || !item.itemId) {
+        withIssues += 1;
+        issues.push(`${item.nome || item.nomeProduto || `Item ${index + 1}`}: produto não cadastrado`);
+        return;
+      }
+
+      const estoque = getOrderItemStock(item);
+      if (estoque === null) {
+        withIssues += 1;
+        issues.push(`${item.nome || item.nomeProduto || `Item ${index + 1}`}: item não encontrado no estoque`);
+        return;
+      }
+
+      if (qtd > estoque) {
+        withIssues += 1;
+        issues.push(`${item.nome || item.nomeProduto || `Item ${index + 1}`}: solicitado ${qtd}, disponível ${estoque}`);
+        return;
+      }
+
+      ready += 1;
+    });
+
+    return {
+      selected,
+      ready,
+      withIssues,
+      unselected,
+      customSkipped,
+      issues,
+    };
   };
 
   const handleFinalize = async (orderId) => {
@@ -143,28 +284,44 @@ const OrdersManagement = () => {
       return;
     }
 
-    // Validar quantidades
+    // Validar quantidades com mensagens detalhadas por item
+    const preValidationErrors = [];
     for (const { index, quantidade } of selectedItems) {
       const item = order.itens[index];
+      const itemName = item.nome || item.nomeProduto || `Item ${index + 1}`;
+
       if (!item.isCustom && item.itemId) {
-        // 🔧 CORREÇÃO: Buscar item original do banco para ter quantidade total correta
-        const { getItemById } = await import("../services/items");
-        const originalItem = await getItemById(item.itemId);
-        
-        if (originalItem && quantidade > (originalItem.quantidade || 0)) {
-          showError(
-            `Quantidade solicitada (${quantidade}) maior que o estoque disponível (${originalItem.quantidade || 0}) para ${item.nome || item.nomeProduto}`
+        const availableQty = getOrderItemStock(item);
+        if (availableQty === null) {
+          preValidationErrors.push(`- ${itemName}: item não encontrado no estoque`);
+          continue;
+        }
+        if (quantidade > availableQty) {
+          preValidationErrors.push(
+            `- ${itemName}: solicitado ${quantidade}, disponível ${availableQty}`
           );
-          return;
         }
       }
+
       if (quantidade <= 0) {
-        showError("A quantidade deve ser maior que zero");
-        return;
+        preValidationErrors.push(`- ${itemName}: quantidade deve ser maior que zero`);
       }
     }
 
-    if (!confirm("Ao finalizar, os itens selecionados serão baixados do estoque automaticamente. Deseja continuar?")) {
+    if (preValidationErrors.length > 0) {
+      showError(`Não foi possível finalizar. Ajuste os itens:\n${preValidationErrors.join("\n")}`);
+      return;
+    }
+
+    const totalSelectedQuantity = selectedItems.reduce(
+      (sum, current) => sum + Number(current.quantidade || 0),
+      0
+    );
+    if (
+      !confirm(
+        `Ao finalizar, ${selectedItems.length} item(ns) serão baixados (${totalSelectedQuantity} unidades no total). Deseja continuar?`
+      )
+    ) {
       return;
     }
 
@@ -188,7 +345,7 @@ const OrdersManagement = () => {
       });
       loadOrders();
     } catch (error) {
-      showError("Erro ao finalizar pedido: " + error.message);
+      showError(formatFinalizeError(error?.message));
     } finally {
       setLoading(false);
     }
@@ -270,6 +427,16 @@ const OrdersManagement = () => {
               <ShoppingCart className="w-6 h-6 mr-2 text-blue-600" />
               Gerenciar Pedidos
             </h1>
+            <button
+              type="button"
+              onClick={loadOrders}
+              disabled={loading}
+              className="px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition flex items-center gap-2 text-sm"
+              title="Atualizar lista de pedidos"
+            >
+              <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+              Atualizar
+            </button>
           </div>
 
           {/* Filtros */}
@@ -314,6 +481,18 @@ const OrdersManagement = () => {
             >
               Finalizados
             </button>
+            {filterStatus === "finalizado" && (
+              <button
+                onClick={() => setShowArchivedFinalized((prev) => !prev)}
+                className={`px-4 py-2 rounded-lg transition ${
+                  showArchivedFinalized
+                    ? "bg-purple-100 text-purple-800 font-semibold"
+                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                }`}
+              >
+                {showArchivedFinalized ? "Ocultar Arquivados" : "Mostrar Arquivados"}
+              </button>
+            )}
           </div>
 
           {loading && orders.length === 0 ? (
@@ -333,7 +512,10 @@ const OrdersManagement = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {orders.map((order) => (
+              {orders.map((order) => {
+                const finalizeSummary =
+                  order.status === "aprovado" ? getFinalizeSummary(order) : null;
+                return (
                 <div
                   key={order.id}
                   className={`border-2 rounded-lg p-4 lg:p-6 transition ${
@@ -349,6 +531,11 @@ const OrdersManagement = () => {
                           Pedido #{order.id.substring(0, 8)}
                         </h3>
                         {getStatusBadge(order.status)}
+                        {order.archived && (
+                          <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-semibold">
+                            Arquivado
+                          </span>
+                        )}
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-gray-600">
                         <div>
@@ -401,6 +588,19 @@ const OrdersManagement = () => {
                           <Printer className="w-4 h-4" />
                           <span className="hidden sm:inline">Imprimir PDF</span>
                           <span className="sm:hidden">PDF</span>
+                        </button>
+                      )}
+                      {order.status === "finalizado" && (
+                        <button
+                          onClick={() => handleArchive(order.id, !order.archived)}
+                          disabled={loading}
+                          className={`px-4 py-2 rounded-lg transition flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed ${
+                            order.archived
+                              ? "bg-purple-100 text-purple-800 hover:bg-purple-200"
+                              : "bg-gray-700 text-white hover:bg-gray-800"
+                          }`}
+                        >
+                          {order.archived ? "Desarquivar" : "Arquivar"}
                         </button>
                       )}
                       <button
@@ -510,11 +710,13 @@ const OrdersManagement = () => {
                                             type="number"
                                             min="0"
                                             value={quantidadeEditada}
+                                            onFocus={() => handleFocusQuantityForFinalize(order.id, index)}
+                                            onBlur={() => handleBlurQuantityForFinalize(order.id, index)}
                                             onChange={(e) =>
                                               handleUpdateQuantityForFinalize(
                                                 order.id,
                                                 index,
-                                                parseInt(e.target.value) || 0
+                                                e.target.value
                                               )
                                             }
                                             className="w-24 px-2 py-1 text-sm border border-gray-300 rounded text-center font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -586,9 +788,43 @@ const OrdersManagement = () => {
                               <li>Produtos não cadastrados não podem ser baixados do estoque</li>
                             </ul>
                           </div>
+                          {finalizeSummary && (
+                            <div
+                              className={`mb-3 p-3 rounded-lg border ${
+                                finalizeSummary.withIssues > 0
+                                  ? "bg-orange-50 border-orange-200"
+                                  : "bg-green-50 border-green-200"
+                              }`}
+                            >
+                              <p className="text-sm font-semibold text-gray-800 mb-1">
+                                Resumo da baixa em tempo real
+                              </p>
+                              <div className="text-xs lg:text-sm text-gray-700 flex flex-wrap gap-x-4 gap-y-1">
+                                <span>Selecionados: <strong>{finalizeSummary.selected}</strong></span>
+                                <span>Prontos: <strong>{finalizeSummary.ready}</strong></span>
+                                <span>Com problema: <strong>{finalizeSummary.withIssues}</strong></span>
+                                <span>Desmarcados: <strong>{finalizeSummary.unselected}</strong></span>
+                                {finalizeSummary.customSkipped > 0 && (
+                                  <span>Não cadastrados: <strong>{finalizeSummary.customSkipped}</strong></span>
+                                )}
+                              </div>
+                              {finalizeSummary.withIssues > 0 && (
+                                <>
+                                  <p className="mt-2 text-xs text-orange-700">
+                                    Existem itens com problema. Ajuste as quantidades ou desmarque os itens pendentes antes de finalizar.
+                                  </p>
+                                  <ul className="mt-2 text-xs text-orange-800 list-disc list-inside space-y-1">
+                                    {finalizeSummary.issues.map((issue, index) => (
+                                      <li key={`${order.id}-issue-${index}`}>{issue}</li>
+                                    ))}
+                                  </ul>
+                                </>
+                              )}
+                            </div>
+                          )}
                           <button
                             onClick={() => handleFinalize(order.id)}
-                            disabled={loading}
+                            disabled={loading || !finalizeSummary || finalizeSummary.ready === 0 || finalizeSummary.withIssues > 0}
                             className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                           >
                             <Package className="w-4 h-4 lg:w-5 lg:h-5" />
@@ -604,7 +840,8 @@ const OrdersManagement = () => {
                     </div>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

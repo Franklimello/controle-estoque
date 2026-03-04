@@ -42,30 +42,23 @@ export const addExit = async (exitData, userId) => {
 
     let item = null;
 
-    // Buscar item pelo código
-    if (exitData.codigo && exitData.codigo.trim().length > 0) {
+    // Quando itemId é informado, evitamos leitura extra do item (custo Firestore)
+    if (exitData.itemId) {
+      item = {
+        id: exitData.itemId,
+        codigo: exitData.codigo || "",
+      };
+    } else if (exitData.codigo && exitData.codigo.trim().length > 0) {
+      // Buscar item pelo código (necessário quando não recebemos itemId)
       item = await getItemByCodigo(exitData.codigo);
-    }
-    // Buscar por ID
-    else if (exitData.itemId) {
-      const { getItemById } = await import("./items");
-      item = await getItemById(exitData.itemId);
     }
 
     if (!item) {
       throw new Error("Item não encontrado.");
     }
 
-    // --- VERIFICAR ESTOQUE DISPONÍVEL ---
-    const currentStock = item.quantidade || 0;
-
-    if (currentStock < quantidadeInt) {
-      throw new Error(
-        `Estoque insuficiente. Disponível: ${currentStock}, solicitado: ${quantidadeInt}`
-      );
-    }
-
     // --- DECREMENTAR ESTOQUE TOTAL ---
+    // A própria transaction em decrementStock valida existência e saldo.
     await decrementStock(item.id, quantidadeInt);
 
     // --- CONSUMIR LOTES (FIFO pela validade) ---

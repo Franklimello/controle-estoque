@@ -36,8 +36,8 @@ export const validateStockConsistency = async (itemId) => {
     }
 
     const batches = await getBatchesByItem(itemId);
-    const batchesSum = batches.reduce((sum, batch) => sum + (parseInt(batch.quantidade || 0, 10)), 0);
-    const itemQuantity = parseInt(item.quantidade || 0, 10);
+    const batchesSum = batches.reduce((sum, batch) => sum + Number(batch.quantidade || 0), 0);
+    const itemQuantity = Number(item.quantidade || 0);
     const difference = itemQuantity - batchesSum;
 
     const isValid = Math.abs(difference) <= 0.01; // Tolerância para erros de arredondamento
@@ -72,14 +72,14 @@ export const validateStockConsistency = async (itemId) => {
 export const syncItemQuantityFromBatches = async (itemId, userId) => {
   try {
     const batches = await getBatchesByItem(itemId);
-    const batchesSum = batches.reduce((sum, batch) => sum + (parseInt(batch.quantidade || 0, 10)), 0);
+    const batchesSum = batches.reduce((sum, batch) => sum + Number(batch.quantidade || 0), 0);
     
     const item = await getItemById(itemId);
     if (!item) {
       throw new Error("Item não encontrado");
     }
 
-    const oldQuantity = parseInt(item.quantidade || 0, 10);
+    const oldQuantity = Number(item.quantidade || 0);
     
     if (oldQuantity !== batchesSum) {
       await updateItem(itemId, { quantidade: batchesSum }, userId);
@@ -104,6 +104,53 @@ export const syncItemQuantityFromBatches = async (itemId, userId) => {
 };
 
 const ITEMS_COLLECTION = "items";
+const COUNTERS_COLLECTION = "systemCounters";
+const ITEM_CODE_COUNTER_DOC = "itemsCode";
+
+const parseNumericCode = (codigo) => {
+  if (codigo === null || codigo === undefined) return NaN;
+  const trimmed = String(codigo).trim();
+  if (!/^\d+$/.test(trimmed)) return NaN;
+  return Number.parseInt(trimmed, 10);
+};
+
+const getMaxNumericItemCode = async () => {
+  const snapshot = await getDocs(collection(db, ITEMS_COLLECTION));
+  let maxCode = 0;
+  snapshot.docs.forEach((itemDoc) => {
+    const parsed = parseNumericCode(itemDoc.data()?.codigo);
+    if (Number.isFinite(parsed) && parsed > maxCode) {
+      maxCode = parsed;
+    }
+  });
+  return maxCode;
+};
+
+const generateSequentialItemCode = async () => {
+  const counterRef = doc(db, COUNTERS_COLLECTION, ITEM_CODE_COUNTER_DOC);
+  const maxExistingCode = await getMaxNumericItemCode();
+
+  return runTransaction(db, async (transaction) => {
+    const counterSnapshot = await transaction.get(counterRef);
+
+    if (!counterSnapshot.exists()) {
+      const initializedCode = maxExistingCode + 1;
+      transaction.set(counterRef, {
+        current: initializedCode,
+        updatedAt: serverTimestamp(),
+      });
+      return String(initializedCode);
+    }
+
+    const currentCounter = Number(counterSnapshot.data()?.current || 0);
+    const nextCode = currentCounter + 1;
+    transaction.update(counterRef, {
+      current: nextCode,
+      updatedAt: serverTimestamp(),
+    });
+    return String(nextCode);
+  });
+};
 
 /**
  * Adiciona um novo item ao Firestore
@@ -112,9 +159,17 @@ const ITEMS_COLLECTION = "items";
  */
 export const addItem = async (itemData, userId) => {
   try {
+    let finalCode = itemData.codigo;
+    if (!finalCode || String(finalCode).trim().length === 0) {
+      finalCode = await generateSequentialItemCode();
+    } else {
+      finalCode = String(finalCode).trim();
+    }
+
     const docRef = await addDoc(collection(db, ITEMS_COLLECTION), {
       ...itemData,
       nome: itemData.nome ? itemData.nome.toUpperCase().trim() : itemData.nome, // Padronizar nome para maiúsculo
+      codigo: finalCode,
       quantidade: itemData.quantidade || 0,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),

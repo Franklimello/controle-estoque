@@ -1,6 +1,5 @@
 import {
   collection,
-  addDoc,
   getDocs,
   query,
   where,
@@ -8,11 +7,10 @@ import {
   serverTimestamp,
   Timestamp,
   doc,
-  updateDoc,
+  runTransaction,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import { getItemById, updateItem } from "./items";
-import { getBatchesByItem, addOrIncrementBatch, consumeFromBatches } from "./batches";
+import { getItemById } from "./items";
 import { getErrorMessage, logError } from "../utils/errorHandler";
 
 const ADJUSTMENTS_COLLECTION = "stockAdjustments";
@@ -53,72 +51,153 @@ export const addAdjustment = async (adjustmentData, userId) => {
       throw new Error("Item não encontrado");
     }
 
-    // Verificar se a quantidade anterior corresponde à atual
-    const quantidadeAtual = item.quantidade || 0;
-    if (Math.abs(quantidadeAnterior - quantidadeAtual) > 0.01) {
+    const integerUnits = ["UN", "PC", "CX"];
+    const isIntegerUnit = integerUnits.includes((item.unidade || "").toUpperCase());
+    const normalizeQty = (value) => {
+      const numericValue = Number(value);
+      if (!Number.isFinite(numericValue)) return NaN;
+      if (isIntegerUnit) return Math.round(numericValue);
+      return Math.round(numericValue * 100) / 100;
+    };
+    const quantidadeAnteriorNormalizada = normalizeQty(quantidadeAnterior);
+    const quantidadeNovaNormalizada = normalizeQty(quantidadeNova);
+
+    if (!Number.isFinite(quantidadeAnteriorNormalizada) || !Number.isFinite(quantidadeNovaNormalizada)) {
+      throw new Error("Quantidades devem ser números válidos");
+    }
+
+    // Verificar se a quantidade anterior corresponde à atual (comparação normalizada)
+    const quantidadeAtual = Number(item.quantidade || 0);
+    const quantidadeAtualNormalizada = normalizeQty(quantidadeAtual);
+    const compareTolerance = isIntegerUnit ? 0 : 0.01;
+    if (Math.abs(quantidadeAnteriorNormalizada - quantidadeAtualNormalizada) > compareTolerance) {
       throw new Error(
-        `Quantidade anterior informada (${quantidadeAnterior}) não corresponde à quantidade atual (${quantidadeAtual}). Por favor, atualize a página e tente novamente.`
+        `Quantidade anterior informada (${quantidadeAnteriorNormalizada}) não corresponde à quantidade atual (${quantidadeAtualNormalizada}). Por favor, atualize a página e tente novamente.`
       );
     }
 
-    const diferenca = quantidadeNova - quantidadeAnterior;
+    const diferenca = quantidadeNovaNormalizada - quantidadeAnteriorNormalizada;
+    const itemRef = doc(db, "items", itemId);
+    const adjustmentRef = doc(collection(db, ADJUSTMENTS_COLLECTION));
+    const batchesQuery = query(collection(db, "itemBatches"), where("itemId", "==", itemId));
+    const generatedBatchId = `${itemId}_sem-validade`;
+    const generatedBatchRef = doc(db, "itemBatches", generatedBatchId);
+    const initialBatchesSnapshot = await getDocs(batchesQuery);
+    const batchRefs = initialBatchesSnapshot.docs.map((snapshot) => snapshot.ref);
 
-    // Buscar lotes antes de atualizar
-    const batches = await getBatchesByItem(itemId);
-    const quantidadeTotalLotes = batches.reduce(
-      (sum, batch) => sum + (batch.quantidade || 0),
-      0
-    );
+    await runTransaction(db, async (transaction) => {
+      const itemSnapshot = await transaction.get(itemRef);
+      if (!itemSnapshot.exists()) {
+        throw new Error("Item não encontrado");
+      }
 
-    // Atualizar quantidade do item
-    await updateItem(itemId, { quantidade: quantidadeNova }, userId);
+      const itemData = itemSnapshot.data();
+      const currentQty = Number(itemData.quantidade || 0);
+      const currentQtyNormalizada = normalizeQty(currentQty);
+      if (Math.abs(currentQtyNormalizada - quantidadeAnteriorNormalizada) > compareTolerance) {
+        throw new Error(
+          `Quantidade anterior informada (${quantidadeAnteriorNormalizada}) não corresponde à quantidade atual (${currentQtyNormalizada}). Por favor, atualize a página e tente novamente.`
+        );
+      }
 
-    // Ajustar lotes se necessário
-    if (diferenca !== 0) {
+      const batches = [];
+      for (const batchRef of batchRefs) {
+        const batchSnapshot = await transaction.get(batchRef);
+        if (batchSnapshot.exists()) {
+          batches.push({
+            id: batchSnapshot.id,
+            ref: batchSnapshot.ref,
+            ...batchSnapshot.data(),
+          });
+        }
+      }
+      const existingGeneratedBatch = await transaction.get(generatedBatchRef);
+      const batchesAtivos = batches.filter((batch) => Number(batch.quantidade || 0) > 0);
+      const totalBatches = batchesAtivos.reduce((sum, batch) => sum + Number(batch.quantidade || 0), 0);
 
-      if (diferenca > 0) {
-        // Aumentando: adicionar diferença ao lote sem validade ou criar novo
-        await addOrIncrementBatch(itemId, null, diferenca);
-      } else {
-        // Diminuindo: ajustar lotes proporcionalmente ou consumir
-        const quantidadeParaReduzir = Math.abs(diferenca);
-        
-        if (quantidadeTotalLotes >= quantidadeParaReduzir) {
-          // Consumir dos lotes (FIFO)
-          await consumeFromBatches(itemId, quantidadeParaReduzir);
-        } else {
-          // Se não há lotes suficientes, ajustar todos os lotes
-          // Primeiro, zerar todos os lotes
-          for (const batch of batches) {
-            const batchRef = doc(db, "itemBatches", batch.id);
-            await updateDoc(batchRef, {
+      transaction.update(itemRef, {
+        quantidade: quantidadeNovaNormalizada,
+        updatedAt: serverTimestamp(),
+      });
+
+      if (batchesAtivos.length > 0) {
+        if (totalBatches > 0 && quantidadeNovaNormalizada >= 0) {
+          const fator = quantidadeNovaNormalizada / totalBatches;
+          const novasQuantidades = batchesAtivos.map((batch) =>
+            Math.max(
+              0,
+              isIntegerUnit
+                ? Math.round(Number(batch.quantidade || 0) * fator)
+                : Math.round(Number(batch.quantidade || 0) * fator * 100) / 100
+            )
+          );
+          const somaAjustada = novasQuantidades.reduce((sum, qty) => sum + qty, 0);
+          let diferencaArredondamento = quantidadeNovaNormalizada - somaAjustada;
+          if (!isIntegerUnit) {
+            diferencaArredondamento = Math.round(diferencaArredondamento * 100) / 100;
+          }
+
+          for (let i = novasQuantidades.length - 1; i >= 0 && diferencaArredondamento !== 0; i--) {
+            const valorAtual = novasQuantidades[i];
+            const novoValor = valorAtual + diferencaArredondamento;
+            if (novoValor >= 0) {
+              novasQuantidades[i] = isIntegerUnit
+                ? Math.round(novoValor)
+                : Math.round(novoValor * 100) / 100;
+              diferencaArredondamento = 0;
+            }
+          }
+
+          for (let i = 0; i < batchesAtivos.length; i++) {
+            const qtyRaw = Math.max(0, Number(novasQuantidades[i] || 0));
+            const qty = isIntegerUnit
+              ? Math.round(qtyRaw)
+              : Math.round(qtyRaw * 100) / 100;
+            transaction.update(batchesAtivos[i].ref, {
+              quantidade: qty,
+              updatedAt: serverTimestamp(),
+            });
+          }
+        } else if (quantidadeNovaNormalizada === 0) {
+          for (const batch of batchesAtivos) {
+            transaction.update(batch.ref, {
               quantidade: 0,
               updatedAt: serverTimestamp(),
             });
           }
-          // Criar lote sem validade com a quantidade nova
-          if (quantidadeNova > 0) {
-            await addOrIncrementBatch(itemId, null, quantidadeNova);
-          }
+        }
+      } else if (quantidadeNovaNormalizada > 0) {
+        if (existingGeneratedBatch.exists()) {
+          transaction.update(generatedBatchRef, {
+            quantidade: quantidadeNovaNormalizada,
+            validade: "sem-validade",
+            validadeDate: null,
+            updatedAt: serverTimestamp(),
+          });
+        } else {
+          transaction.set(generatedBatchRef, {
+            itemId,
+            validade: "sem-validade",
+            validadeDate: null,
+            quantidade: quantidadeNovaNormalizada,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
         }
       }
-    } else if (batches.length === 0 && quantidadeNova > 0) {
-      // Se não há lotes e quantidade é positiva, criar lote sem validade
-      await addOrIncrementBatch(itemId, null, quantidadeNova);
-    }
 
-    // Registrar ajuste no histórico
-    const adjustmentRef = await addDoc(collection(db, ADJUSTMENTS_COLLECTION), {
-      itemId,
-      itemNome: item.nome || "",
-      itemCodigo: item.codigo || "",
-      quantidadeAnterior,
-      quantidadeNova,
-      diferenca,
-      motivo: motivo.trim(),
-      observacao: observacao ? observacao.trim() : "",
-      usuarioId: userId,
-      createdAt: serverTimestamp(),
+      transaction.set(adjustmentRef, {
+        itemId,
+        itemNome: item.nome || "",
+        itemCodigo: item.codigo || "",
+        quantidadeAnterior: quantidadeAnteriorNormalizada,
+        quantidadeNova: quantidadeNovaNormalizada,
+        diferenca,
+        motivo: (motivo || "").trim(),
+        observacao: observacao ? observacao.trim() : "",
+        usuarioId: userId,
+        createdAt: serverTimestamp(),
+      });
     });
 
     return adjustmentRef.id;
