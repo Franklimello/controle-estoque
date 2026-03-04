@@ -58,6 +58,15 @@ export const getErrorMessage = (error) => {
     return "Operação não pode ser realizada no momento. Verifique os dados e tente novamente";
   }
 
+  if (
+    errorCode.includes("resource-exhausted") ||
+    errorCode.includes("quota-exceeded") ||
+    errorMessage.toLowerCase().includes("quota exceeded") ||
+    errorMessage.toLowerCase().includes("quota")
+  ) {
+    return "Limite de uso do Firebase atingido temporariamente. Aguarde alguns minutos e tente novamente";
+  }
+
   if (errorCode.includes("index") || errorMessage.includes("index")) {
     return "Índice do banco de dados não encontrado. Entre em contato com o administrador";
   }

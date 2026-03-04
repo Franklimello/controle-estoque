@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useToastContext } from "../context/ToastContext";
 import { useItems } from "../context/ItemsContext";
-import { addAdjustment, getAdjustments } from "../services/adjustments";
+import { addAdjustment, getRecentAdjustments } from "../services/adjustments";
 import { getItemByCodigo, getItemById, updateItem } from "../services/items";
 import { zeroAllStock } from "../services/bulkStock";
 import { Settings, Save, X, Search, AlertTriangle, Package, TrendingUp, Eraser } from "lucide-react";
@@ -46,8 +46,8 @@ const StockAdjustment = () => {
   // Buscar ajustes recentes
   const loadRecentAdjustments = async () => {
     try {
-      const adjustments = await getAdjustments();
-      setRecentAdjustments(adjustments.slice(0, 5));
+      const adjustments = await getRecentAdjustments(5);
+      setRecentAdjustments(adjustments);
     } catch (error) {
       // Log do erro mas não mostrar para o usuário (não é crítico)
       console.error("Erro ao carregar ajustes recentes:", error);

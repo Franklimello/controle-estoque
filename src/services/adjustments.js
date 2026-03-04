@@ -4,6 +4,7 @@ import {
   query,
   where,
   orderBy,
+  limit as firestoreLimit,
   serverTimestamp,
   Timestamp,
   doc,
@@ -219,28 +220,30 @@ export const addAdjustment = async (adjustmentData, userId) => {
  */
 export const getAdjustments = async (filters = {}) => {
   try {
-    let q = query(
-      collection(db, ADJUSTMENTS_COLLECTION),
-      orderBy("createdAt", "desc")
-    );
+    const constraints = [orderBy("createdAt", "desc")];
 
     if (filters.itemId) {
-      q = query(q, where("itemId", "==", filters.itemId));
+      constraints.push(where("itemId", "==", filters.itemId));
     }
 
     if (filters.startDate || filters.endDate) {
       if (filters.startDate) {
         const start = new Date(filters.startDate);
         start.setHours(0, 0, 0, 0);
-        q = query(q, where("createdAt", ">=", Timestamp.fromDate(start)));
+        constraints.push(where("createdAt", ">=", Timestamp.fromDate(start)));
       }
       if (filters.endDate) {
         const end = new Date(filters.endDate);
         end.setHours(23, 59, 59, 999);
-        q = query(q, where("createdAt", "<=", Timestamp.fromDate(end)));
+        constraints.push(where("createdAt", "<=", Timestamp.fromDate(end)));
       }
     }
 
+    if (Number.isFinite(filters.limit) && filters.limit > 0) {
+      constraints.push(firestoreLimit(filters.limit));
+    }
+
+    const q = query(collection(db, ADJUSTMENTS_COLLECTION), ...constraints);
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map((doc) => ({
       id: doc.id,
@@ -267,21 +270,6 @@ export const getAdjustmentsByItem = async (itemId) => {
  * @returns {Promise<Array>} Lista de ajustes recentes
  */
 export const getRecentAdjustments = async (limit = 10) => {
-  try {
-    const q = query(
-      collection(db, ADJUSTMENTS_COLLECTION),
-      orderBy("createdAt", "desc")
-    );
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs
-      .slice(0, limit)
-      .map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-  } catch (error) {
-    logError("getRecentAdjustments", error);
-    throw error;
-  }
+  return getAdjustments({ limit });
 };
 
