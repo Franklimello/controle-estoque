@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useItems } from "../context/ItemsContext";
 import { useToastContext } from "../context/ToastContext";
@@ -13,12 +13,14 @@ const Orders = () => {
   const { success, error: showError } = useToastContext();
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [orderItems, setOrderItems] = useState([]);
   const [setorDestino, setSetorDestino] = useState("");
   const [observacao, setObservacao] = useState("");
   const [whatsappSolicitante, setWhatsappSolicitante] = useState("");
   const [customProductName, setCustomProductName] = useState("");
   const [showCustomProduct, setShowCustomProduct] = useState(false);
+  const searchInputRef = useRef(null);
   
   // Estado para itens selecionados (com quantidade)
   const [selectedItems, setSelectedItems] = useState({});
@@ -27,31 +29,76 @@ const Orders = () => {
     return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
   };
 
-  // Filtrar itens para exibição com busca fuzzy
-  const filteredItems = useMemo(() => {
-    let result = items;
-    
-    if (searchTerm.trim()) {
-      result = items.filter((it) =>
-        fuzzySearch(it, searchTerm, ['nome', 'codigo', 'categoria'], 0.4)
-      );
-      // Ordenar por relevância (mais similares primeiro)
-      result = sortByRelevance(result, searchTerm, ['nome', 'codigo', 'categoria']);
-    }
-    
-    // Ordenar: produtos marcados como "SAI MUITO" primeiro
-    // Para itens expandidos, verificar o item original
-    result.sort((a, b) => {
-      const aSaiMuito = a.saiMuito || false;
-      const bSaiMuito = b.saiMuito || false;
+  // Debounce da busca para melhorar desempenho
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 250);
+    return () => clearTimeout(timeout);
+  }, [searchTerm]);
 
-      if (aSaiMuito && !bSaiMuito) return -1;
-      if (!aSaiMuito && bSaiMuito) return 1;
-      return a.nome.localeCompare(b.nome);
-    });
-    
+  // Atalho "/" para focar no campo de busca
+  useEffect(() => {
+    const handleShortcutFocusSearch = (event) => {
+      const target = event.target;
+      const tagName = target?.tagName?.toLowerCase();
+      const isTypingContext =
+        tagName === "input" ||
+        tagName === "textarea" ||
+        tagName === "select" ||
+        target?.isContentEditable;
+
+      if (event.key === "/" && !isTypingContext) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+
+    window.addEventListener("keydown", handleShortcutFocusSearch);
+    return () => window.removeEventListener("keydown", handleShortcutFocusSearch);
+  }, []);
+
+  // Filtrar itens para exibição com busca parecida com a Home
+  const filteredItems = useMemo(() => {
+    const normalizeSearchValue = (value) =>
+      String(value || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim();
+
+    const fields = ["nome", "codigo", "categoria", "local", "fornecedor"];
+    let result = [...items];
+
+    if (debouncedSearchTerm.trim()) {
+      const normalizedTerm = normalizeSearchValue(debouncedSearchTerm);
+
+      const directMatches = result.filter((item) =>
+        fields.some((field) => normalizeSearchValue(item[field]).includes(normalizedTerm))
+      );
+
+      if (directMatches.length > 0) {
+        result = sortByRelevance(directMatches, debouncedSearchTerm, fields);
+      } else {
+        result = result.filter((item) =>
+          fuzzySearch(item, debouncedSearchTerm, fields, 0.65)
+        );
+        result = sortByRelevance(result, debouncedSearchTerm, fields);
+      }
+    } else {
+      // Sem busca: priorizar itens "sai muito" para seleção rápida
+      result.sort((a, b) => {
+        const aSaiMuito = a.saiMuito || false;
+        const bSaiMuito = b.saiMuito || false;
+
+        if (aSaiMuito && !bSaiMuito) return -1;
+        if (!aSaiMuito && bSaiMuito) return 1;
+        return (a.nome || "").localeCompare(b.nome || "", "pt-BR");
+      });
+    }
+
     return result;
-  }, [items, searchTerm]);
+  }, [items, debouncedSearchTerm]);
 
   // Toggle seleção de item
   const handleToggleItem = (itemId) => {
@@ -277,16 +324,26 @@ const Orders = () => {
               )}
             </div>
 
-            {/* Campo de busca */}
-            <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="Buscar por nome ou código..."
-              />
+            {/* Campo de busca sticky */}
+            <div className="sticky top-2 z-20 bg-white/95 backdrop-blur border-b border-gray-200 mb-4 pb-3">
+              <div className="relative mb-3">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Buscar por nome ou código..."
+                />
+              </div>
+              <div className="flex items-center justify-between text-xs sm:text-sm text-gray-600">
+                <span>
+                  {filteredItems.length} resultado(s)
+                  {debouncedSearchTerm.trim() ? ` para "${debouncedSearchTerm}"` : ""}
+                </span>
+                <span className="text-gray-500">Atalho: /</span>
+              </div>
             </div>
 
             {/* Lista de todos os produtos com checkboxes */}
